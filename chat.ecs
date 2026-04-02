@@ -1,0 +1,9 @@
+!   chat.ecs
+
+    script Chat
+
+    variable Message
+    put `Hello from Chat` into Message
+    log Message
+
+    exit
