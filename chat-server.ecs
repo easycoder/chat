@@ -57,6 +57,8 @@
     variable MailTo
     variable MailSubject
     variable MailBody
+    variable Version
+    variable RemoteVersion
 
     ! Load credentials
 	if file `credentials` exists load Credentials from `credentials`
@@ -75,6 +77,29 @@
     put entry `mail_login` of CredDict into MailLogin
     put entry `mail_password` of CredDict into MailPassword
     put entry `mail_from` of CredDict into MailFrom
+
+    ! Check for a newer version
+    get RemoteVersion from url `https://raw.githubusercontent.com/easycoder/chat/main/version`
+        or print `Warning: could not check for updates`
+    if RemoteVersion is not empty
+    begin
+        replace ` ` with `` in RemoteVersion
+        replace newline with `` in RemoteVersion
+        if file `.version` exists load Version from `.version`
+        else put `0` into Version
+        replace ` ` with `` in Version
+        replace newline with `` in Version
+        if RemoteVersion is greater than Version
+        begin
+            print `Updating from version ` cat Version cat ` to ` cat RemoteVersion
+            download `https://raw.githubusercontent.com/easycoder/chat/main/chat-server.ecs` to `chat-server.ecs`
+            save RemoteVersion to `.version`
+            print `Update complete. Restarting...`
+            system background `sleep 2 && easycoder chat-server.ecs`
+            exit
+        end
+        else print `Chat server version ` cat Version cat ` is up to date`
+    end
 
     ! Load user database
     if file `users.json` exists
