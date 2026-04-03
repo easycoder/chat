@@ -77,15 +77,16 @@
     put entry `mail_login` of CredDict into MailLogin
     put entry `mail_password` of CredDict into MailPassword
     put entry `mail_from` of CredDict into MailFrom
+    put MAC cat `/cat` into MAC
 
     ! Check for a newer version
-    get RemoteVersion from url `https://raw.githubusercontent.com/easycoder/chat/main/version`
+    get RemoteVersion from url `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat-version`
         or print `Warning: could not check for updates`
     if RemoteVersion is not empty
     begin
         replace ` ` with `` in RemoteVersion
         replace newline with `` in RemoteVersion
-        if file `.version` exists load Version from `.version`
+        if file `.chat-version` exists load Version from `.chat-version`
         else put `0` into Version
         replace ` ` with `` in Version
         replace newline with `` in Version
@@ -93,7 +94,7 @@
         begin
             print `Updating from version ` cat Version cat ` to ` cat RemoteVersion
             download `https://raw.githubusercontent.com/easycoder/chat/main/chat-server.ecs` to `chat-server.ecs`
-            save RemoteVersion to `.version`
+            save RemoteVersion to `.chat-version`
             print `Update complete. Restarting...`
             system background `sleep 2 && easycoder chat-server.ecs`
             exit
@@ -102,15 +103,15 @@
     end
 
     ! Load user database
-    if file `users.json` exists
+    if file `chat/chat-users.json` exists
     begin
-        load Users from `users.json`
+        load Users from `chat/chat-users.json`
         put json Users into UsersDict
     end
 
     ! Ensure data directory exists
-    create directory `data`
-    create directory `data/topics`
+    create directory `chat/chat-data`
+    create directory `chat/chat-data/topics`
 
     print `Chat server starting...`
     print `Broker: ` cat Broker
@@ -190,7 +191,7 @@ DoRegister:
     begin
         set entry ReqUser of UsersDict to ReqPass
         put UsersDict into Users
-        save Users to `users.json`
+        save Users to `chat/chat-users.json`
         put `ok|` cat ReqUser into Reply
         print `Registered: ` cat ReqUser
     end
@@ -228,9 +229,9 @@ DoLogin:
 
 DoTopics:
     print `Topics request from ` cat SenderName
-    if file `data/topics.json` exists
+    if file `chat/chat-data/topics.json` exists
     begin
-        load Reply from `data/topics.json`
+        load Reply from `chat/chat-data/topics.json`
     end
     else put `[]` into Reply
     print `Sending topics: ` cat Reply
@@ -248,7 +249,7 @@ DoNewTopic:
     add 1 to Pos
     put from Pos of MessageText into TopicDesc
     print `New topic request: ` cat TopicName cat ` by ` cat TopicCreator
-    put `data/topics/` cat TopicName into TopicPath
+    put `chat/chat-data/topics/` cat TopicName into TopicPath
     if file TopicPath exists
     begin
         put `error|Topic already exists` into Reply
@@ -260,7 +261,7 @@ DoNewTopic:
     put `{"name":"` cat TopicName cat `","description":"` cat TopicDesc cat `","creator":"` cat TopicCreator cat `"}` into TopicMeta
     save TopicMeta to TopicPath cat `/topic.json`
     ! Update the topic index
-    if file `data/topics.json` exists load TopicIndex from `data/topics.json`
+    if file `chat/chat-data/topics.json` exists load TopicIndex from `chat/chat-data/topics.json`
     else put `[]` into TopicIndex
     ! Remove trailing ] and append new entry
     put the length of TopicIndex into Pos
@@ -268,7 +269,7 @@ DoNewTopic:
     put left Pos of TopicIndex into TopicIndex
     if TopicIndex is not `[` put TopicIndex cat `,` into TopicIndex
     put TopicIndex cat `{"name":"` cat TopicName cat `","description":"` cat TopicDesc cat `"}]` into TopicIndex
-    save TopicIndex to `data/topics.json`
+    save TopicIndex to `chat/chat-data/topics.json`
     put `ok|` cat TopicName into Reply
     print `Created topic: ` cat TopicName
     gosub to SendReply
@@ -283,7 +284,7 @@ DoView:
     add 1 to Pos
     put from Pos of MessageText into PostId
     print `View post ` cat PostId cat ` in ` cat TopicName
-    put `data/topics/` cat TopicName cat `/posts/` cat PostId cat `/post.json` into PostsPath
+    put `chat/chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/post.json` into PostsPath
     if file PostsPath does not exist
     begin
         put `error|Post not found` into Reply
@@ -292,7 +293,7 @@ DoView:
     end
     load PostContent from PostsPath
     ! Check for replies
-    put `data/topics/` cat TopicName cat `/posts/` cat PostId cat `/replies.json` into PostsPath
+    put `chat/chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/replies.json` into PostsPath
     if file PostsPath exists
     begin
         load PostsIndex from PostsPath
@@ -310,7 +311,7 @@ DoView:
 DoPosts:
     ! MessageText is the topic name
     print `Posts request for topic: ` cat MessageText
-    put `data/topics/` cat MessageText cat `/posts.json` into PostsPath
+    put `chat/chat-data/topics/` cat MessageText cat `/posts.json` into PostsPath
     if file PostsPath exists
     begin
         load Reply from PostsPath
@@ -334,7 +335,7 @@ DoPost:
     add 1 to Pos
     put from Pos of MessageText into PostBody
     print `New post in ` cat TopicName cat ` by ` cat PostAuthor cat `: ` cat PostSubject
-    put `data/topics/` cat TopicName into TopicPath
+    put `chat/chat-data/topics/` cat TopicName into TopicPath
     if file TopicPath does not exist
     begin
         put `error|Topic not found` into Reply
@@ -399,7 +400,7 @@ DoReply:
         return
     end
     ! Build parent path
-    put `data/topics/` cat TopicName cat `/posts/` cat PostId into ParentPath
+    put `chat/chat-data/topics/` cat TopicName cat `/posts/` cat PostId into ParentPath
     if file ParentPath does not exist
     begin
         put `error|Parent post not found` into Reply

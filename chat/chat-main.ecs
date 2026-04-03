@@ -138,7 +138,7 @@
 
     ! Get Credentials from server
     variable Credentials
-    rest get Credentials from `credentials` or rest get Credentials from `credentials.php`
+    rest get Credentials from `../credentials` or rest get Credentials from `../credentials.php`
         or go to AbandonShip
 !    log Credentials
     put element `broker` of Credentials into Broker
@@ -146,6 +146,7 @@
     put element `password` of Credentials into MqttPassword
     put element `mac` of Credentials into MAC
     if Broker is empty go to NoCredentials
+    put MAC cat `/cat` into MAC
 
     ! Set up MQTT
     put `Chat-` cat random 999999 into MyID
