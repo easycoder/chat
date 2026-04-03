@@ -54,7 +54,7 @@
     variable Broker
     variable MqttUsername
     variable MqttPassword
-    variable ServerName
+    variable MAC
     variable Action
     variable MessageText
     variable ReceivedMessage
@@ -77,7 +77,6 @@
     variable PSubject
     variable PAuthor
     variable PEntry
-    variable PId
     variable PBody
     variable CurrentPostId
     variable PostData
@@ -87,8 +86,9 @@
     variable REntry
     variable RAuthor
     variable RPreview
-    variable RDepth
     variable CurrentDepth
+
+!    debug step
 
     ! Build the UI
     create Body
@@ -136,20 +136,22 @@
     attach CancelReplyButton to `cancel-reply-button`
     attach ReplyMessage to `reply-message`
 
-    ! Get MQTT credentials from server
-    variable MqttCreds
-    rest get MqttCreds from `mqtt-credentials.json`
-    put element `broker` of MqttCreds into Broker
-    put element `username` of MqttCreds into MqttUsername
-    put element `password` of MqttCreds into MqttPassword
-    put element `server` of MqttCreds into ServerName
+    ! Get Credentials from server
+    variable Credentials
+    rest get Credentials from `credentials` or rest get Credentials from `credentials.php`
+        or go to AbandonShip
+!    log Credentials
+    put element `broker` of Credentials into Broker
+    put element `username` of Credentials into MqttUsername
+    put element `password` of Credentials into MqttPassword
+    put element `mac` of Credentials into MAC
     if Broker is empty go to NoCredentials
 
     ! Set up MQTT
     put `Chat-` cat random 999999 into MyID
 
     init ServerTopic
-        name ServerName
+        name MAC
         qos 1
 
     init MyTopic
@@ -723,3 +725,10 @@ WaitLoop:
 NoCredentials:
     set the content of Status to `No credentials provided`
     stop
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 	Warn the user and abandon this run
+AbandonShip:
+	alert `An error has occurred while communicating with the controller.`
+    	cat newline cat `Please refresh this browser page to restart.`
+    exit

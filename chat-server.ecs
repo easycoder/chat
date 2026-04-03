@@ -3,6 +3,7 @@
     script ChatServer
 
     use mqtt
+    use email
 
     topic ServerTopic
     topic SenderTopic
@@ -13,7 +14,7 @@
     variable Broker
     variable MqttUsername
     variable MqttPassword
-    variable MyID
+    variable MAC
     variable SenderName
     variable SenderQoS
     variable Action
@@ -49,19 +50,31 @@
     variable ReplyBody2
     variable Depth
     variable Pos2
+    variable MailServer
+    variable MailLogin
+    variable MailPassword
+    variable MailFrom
+    variable MailTo
+    variable MailSubject
+    variable MailBody
 
-    ! Load MQTT credentials
-    if file `credentials` exists load Credentials from `credentials`
+    ! Load credentials
+	if file `credentials` exists load Credentials from `credentials`
     else
     begin
-        print `No credentials file found.`
-        exit
+	    get Credentials from url `https://chat.eclecity.net/credentials.php`
+    	    or go to NoCredentials
     end
     put json Credentials into CredDict
+    log CredDict
     put entry `broker` of CredDict into Broker
     put entry `username` of CredDict into MqttUsername
     put entry `password` of CredDict into MqttPassword
-    put entry `topic` of CredDict into MyID
+    put entry `mac` of CredDict into MAC
+    put entry `mail_server` of CredDict into MailServer
+    put entry `mail_login` of CredDict into MailLogin
+    put entry `mail_password` of CredDict into MailPassword
+    put entry `mail_from` of CredDict into MailFrom
 
     ! Load user database
     if file `users.json` exists
@@ -76,11 +89,11 @@
 
     print `Chat server starting...`
     print `Broker: ` cat Broker
-    print `Topic: ` cat MyID
+    print `Topic: ` cat MAC
 
     ! Set up MQTT
     init ServerTopic
-        name MyID
+        name MAC
         qos 1
 
     mqtt
@@ -121,6 +134,7 @@
                 else if Action is `posts` gosub to DoPosts
                 else if Action is `post` gosub to DoPost
                 else if Action is `reply` gosub to DoReply
+                else if Action is `sendemail` gosub to DoSendEmail
                 else print `Unknown action: ` cat Action
             end
         end
@@ -395,6 +409,27 @@ DoReply:
     save RepliesIndex to PostsPath
     put `ok|` cat ReplyId into Reply
     print `Created reply ` cat ReplyId
+    gosub to SendReply
+    return
+
+! ---- Send email ----
+
+DoSendEmail:
+    ! MessageText is JSON: {"to":"...","subject":"...","body":"..."}
+    put json MessageText into ReceivedMessage
+    put entry `to` of ReceivedMessage into MailTo
+    put entry `subject` of ReceivedMessage into MailSubject
+    put entry `body` of ReceivedMessage into MailBody
+    print `Email request: to ` cat MailTo cat ` subject ` cat MailSubject
+    send email to MailTo from MailFrom subject MailSubject body MailBody via MailServer user MailLogin password MailPassword
+        or begin
+            print `SendEmail: failed to send email to ` cat MailTo
+            put `error|Failed to send email` into Reply
+            gosub to SendReply
+            return
+        end
+    print `SendEmail: sent email to ` cat MailTo
+    put `ok|sent` into Reply
     gosub to SendReply
     return
 
