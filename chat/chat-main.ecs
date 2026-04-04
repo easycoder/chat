@@ -5,13 +5,20 @@
     div Body
     variable Layout
 
+    h2 Title
     div Status
     div LoginPanel
     input UsernameInput
     input PasswordInput
     button LoginButton
-    button RegisterButton
+    button ShowRegisterLink
     div LoginMessage
+    div RegisterPanel
+    input RegUsernameInput
+    input RegPasswordInput
+    button RegisterButton
+    button ShowLoginLink
+    div RegisterMessage
     div ChatPanel
     button ShowTopicsButton
     button NewTopicToggle
@@ -50,11 +57,13 @@
 
     topic MyTopic
     topic ServerTopic
+    variable TitleText
     variable MyID
     variable Broker
     variable MqttUsername
     variable MqttPassword
-    variable MAC
+    variable ChatConfig
+    variable SystemID
     variable Action
     variable MessageText
     variable ReceivedMessage
@@ -88,20 +97,117 @@
     variable RPreview
     variable CurrentDepth
 
-!    debug step
+    debug step
 
-    ! Build the UI
+	set the tracer rows to 10
+
+    ! Get Credentials from server
+    variable Credentials
+!    rest get Credentials from `../credentials.php` or go to AbandonShip
+    rest get Credentials from `../credentials`
+    or begin
+        log `../credentials does not exist`
+        rest get Credentials from `../credentials.php` or go to AbandonShip
+        go to GotCredentials
+    end
+GotCredentials:
+!    log Credentials
+    put element `broker` of Credentials into Broker
+    put element `username` of Credentials into MqttUsername
+    put element `password` of Credentials into MqttPassword
+    if Broker is empty go to NoCredentials
+    
+    rest get ChatConfig from `chat-config.json`
+!    log ChatConfig
+    put element `id` of ChatConfig into SystemID
+    put element `title` of ChatConfig into TitleText
+    put SystemID cat `/chat` into SystemID
+    log `The system ID is ` cat SystemID
+
+    ! Set up MQTT
+    put `Chat-` cat random 999999 into MyID
+
+    init ServerTopic
+        name SystemID
+        qos 1
+
+    init MyTopic
+        name MyID
+        qos 1
+
+    mqtt
+        token MqttUsername MqttPassword
+        id MyID
+        broker Broker
+        port 443
+        subscribe MyTopic
+
+    ! Load saved chat credentials
+    get ChatUsername from storage as `chat-user`
+    if ChatUsername is `null` put empty into ChatUsername
+    if ChatUsername is `undefined` put empty into ChatUsername
+    get ChatPassword from storage as `chat-pass`
+    if ChatPassword is `null` put empty into ChatPassword
+    if ChatPassword is `undefined` put empty into ChatPassword
+
+    on mqtt connect
+    begin
+        log `Connected to broker`
+        go to FetchLayout
+    end
+
+    on mqtt message
+    begin
+        put the mqtt message into ReceivedMessage
+    end
+
+    on mqtt error
+    begin
+        alert `MQTT connection failed. Check credentials and try again.`
+    end
+
+    stop
+
+! ---- Fetch layout from server ----
+
+FetchLayout:
+    ! Ask server to check for updates (fire and forget)
+    send to ServerTopic
+        sender MyTopic
+        action `check-update`
+        message ``
+
+    put empty into ReceivedMessage
+    send to ServerTopic
+        sender MyTopic
+        action `get-file`
+        message `chat.json`
+    gosub WaitForReply
+    if ReceivedMessage is empty
+    begin
+        alert `Could not load layout from server`
+        stop
+    end
+    put ReceivedMessage into Layout
+    put empty into ReceivedMessage
+
     create Body
-    rest get Layout from `chat.json`
     render Layout in Body
 
     attach Status to `status`
+    attach Title to `title`
     attach LoginPanel to `login-panel`
     attach UsernameInput to `username-input`
     attach PasswordInput to `password-input`
     attach LoginButton to `login-button`
-    attach RegisterButton to `register-button`
+    attach ShowRegisterLink to `show-register-link`
     attach LoginMessage to `login-message`
+    attach RegisterPanel to `register-panel`
+    attach RegUsernameInput to `reg-username-input`
+    attach RegPasswordInput to `reg-password-input`
+    attach RegisterButton to `register-button`
+    attach ShowLoginLink to `show-login-link`
+    attach RegisterMessage to `register-message`
     attach ChatPanel to `chat-panel`
     attach ShowTopicsButton to `show-topics-button`
     attach NewTopicToggle to `new-topic-toggle`
@@ -136,62 +242,10 @@
     attach CancelReplyButton to `cancel-reply-button`
     attach ReplyMessage to `reply-message`
 
-    ! Get Credentials from server
-    variable Credentials
-    rest get Credentials from `../credentials` or rest get Credentials from `../credentials.php`
-        or go to AbandonShip
-!    log Credentials
-    put element `broker` of Credentials into Broker
-    put element `username` of Credentials into MqttUsername
-    put element `password` of Credentials into MqttPassword
-    put element `mac` of Credentials into MAC
-    if Broker is empty go to NoCredentials
-    put MAC cat `/cat` into MAC
-
-    ! Set up MQTT
-    put `Chat-` cat random 999999 into MyID
-
-    init ServerTopic
-        name MAC
-        qos 1
-
-    init MyTopic
-        name MyID
-        qos 1
-
-    mqtt
-        token MqttUsername MqttPassword
-        id MyID
-        broker Broker
-        port 443
-        subscribe MyTopic
-
-    ! Load saved chat credentials
-    get ChatUsername from storage as `chat-user`
-    if ChatUsername is `null` clear ChatUsername
-    if ChatUsername is `undefined` clear ChatUsername
-    get ChatPassword from storage as `chat-pass`
-    if ChatPassword is `null` clear ChatPassword
-    if ChatPassword is `undefined` clear ChatPassword
-
-    on mqtt connect
-    begin
-        set the content of Status to `Connected to broker. Checking server...`
-        set style `color` of Status to `#880`
-        go to CheckServer
-    end
-
-    on mqtt message
-    begin
-        put the mqtt message into ReceivedMessage
-    end
-
-    on mqtt error
-    begin
-        alert `MQTT connection failed. Check credentials and try again.`
-    end
-
-    stop
+    set the content of Title to TitleText
+    set the content of Status to `Connected to broker. Checking server...`
+    set style `color` of Status to `#880`
+    go to CheckServer
 
 ! ---- Server check ----
 
@@ -202,6 +256,7 @@ CheckServer:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -209,9 +264,10 @@ CheckServer:
         set style `color` of Status to `#800`
         stop
     end
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     set the content of Status to `Connected to broker. Connected to chat server.`
     set style `color` of Status to `#080`
+    log `Chat user name is ` cat ChatUsername
     if ChatUsername is not empty go to AutoLogin
     go to ShowLogin
 
@@ -219,88 +275,21 @@ CheckServer:
 
 AutoLogin:
     set the content of Status to `Logging in as ` cat ChatUsername cat `...`
+    put empty into ReceivedMessage
     put `login` into Action
     put ChatUsername cat `|` cat ChatPassword into MessageText
     send to ServerTopic
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
-    gosub HandleAuthReply
-    stop
-
-ShowLogin:
-    set the text of UsernameInput to ChatUsername
-    on click LoginButton gosub DoLogin
-    on click RegisterButton gosub DoRegister
-    stop
-
-DoLogin:
-    put the text of UsernameInput into ChatUsername
-    if ChatUsername is empty
-    begin
-        set the content of LoginMessage to `Please enter a username`
-        set style `color` of LoginMessage to `#800`
-        return
-    end
-    if PasswordInput is empty
-    begin
-        set the content of LoginMessage to `Please enter a password`
-        set style `color` of LoginMessage to `#800`
-        return
-    end
-    put the text of PasswordInput into ChatPassword
-    set the content of LoginMessage to `Logging in...`
-    set style `color` of LoginMessage to `#888`
-    put `login` into Action
-    put ChatUsername cat `|` cat ChatPassword into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-    gosub WaitForReply
-    gosub HandleAuthReply
-    return
-
-DoRegister:
-    put the text of UsernameInput into ChatUsername
-    if ChatUsername is empty
-    begin
-        set the content of LoginMessage to `Please enter a username`
-        set style `color` of LoginMessage to `#800`
-        return
-    end
-    if PasswordInput is empty
-    begin
-        set the content of LoginMessage to `Please enter a password`
-        set style `color` of LoginMessage to `#800`
-        return
-    end
-    put the text of PasswordInput into ChatPassword
-    set the content of LoginMessage to `Registering...`
-    set style `color` of LoginMessage to `#888`
-    put `register` into Action
-    put ChatUsername cat `|` cat ChatPassword into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-    gosub WaitForReply
-    gosub HandleAuthReply
-    return
-
-HandleAuthReply:
-    if ReceivedMessage is empty
-    begin
-        set the content of LoginMessage to `No reply from server`
-        set style `color` of LoginMessage to `#800`
-        return
-    end
+    if ReceivedMessage is empty go to ShowLogin
     put position of `|` in ReceivedMessage into Pos
     put left Pos of ReceivedMessage into ReplyStatus
     add 1 to Pos
     put from Pos of ReceivedMessage into ReplyBody
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     if ReplyStatus is `ok`
     begin
         put ReplyBody into ChatUsername
@@ -308,22 +297,125 @@ HandleAuthReply:
         put ChatPassword into storage as `chat-pass`
         go to EnterChat
     end
-    else
+    put empty into ChatUsername
+    put empty into ChatPassword
+    put empty into storage as `chat-user`
+    put empty into storage as `chat-pass`
+    go to ShowLogin
+
+ShowLogin:
+    set the text of UsernameInput to ChatUsername
+    set the content of LoginMessage to ``
+    set style `display` of LoginPanel to `flex`
+    set style `display` of RegisterPanel to `none`
+    disable LoginButton
+    gosub CheckLoginFields
+    on click LoginButton go to DoLogin
+    on click ShowRegisterLink go to ShowRegister
+    on key gosub CheckLoginFields
+    stop
+
+ShowRegister:
+    set the content of RegisterMessage to ``
+    set style `display` of LoginPanel to `none`
+    set style `display` of RegisterPanel to `flex`
+    disable RegisterButton
+    gosub CheckRegisterFields
+    on click RegisterButton go to DoRegister
+    on click ShowLoginLink go to ShowLogin
+    on key gosub CheckRegisterFields
+    stop
+
+DoLogin:
+    put the text of UsernameInput into ChatUsername
+    put the text of PasswordInput into ChatPassword
+    disable LoginButton
+    set the content of LoginMessage to `Logging in...`
+    set style `color` of LoginMessage to `#888`
+    put empty into ReceivedMessage
+    put `login` into Action
+    put ChatUsername cat `|` cat ChatPassword into MessageText
+    send to ServerTopic
+        sender MyTopic
+        action Action
+        message MessageText
+         ! confirm
+    gosub WaitForReply
+    if ReceivedMessage is empty
     begin
-        set the content of LoginMessage to ReplyBody
+        gosub CheckLoginFields
+        set the content of LoginMessage to `No reply from server`
         set style `color` of LoginMessage to `#800`
-        clear ChatUsername
-        clear ChatPassword
-        put empty into storage as `chat-user`
-        put empty into storage as `chat-pass`
+        stop
     end
-    return
+    put position of `|` in ReceivedMessage into Pos
+    put left Pos of ReceivedMessage into ReplyStatus
+    add 1 to Pos
+    put from Pos of ReceivedMessage into ReplyBody
+    put empty into ReceivedMessage
+    if ReplyStatus is `ok`
+    begin
+        put ReplyBody into ChatUsername
+        put ChatUsername into storage as `chat-user`
+        put ChatPassword into storage as `chat-pass`
+        go to EnterChat
+    end
+    gosub CheckLoginFields
+    set the content of LoginMessage to ReplyBody
+    set style `color` of LoginMessage to `#800`
+    put empty into ChatUsername
+    put empty into ChatPassword
+    put empty into storage as `chat-user`
+    put empty into storage as `chat-pass`
+    stop
+
+DoRegister:
+    put the text of RegUsernameInput into ChatUsername
+    put the text of RegPasswordInput into ChatPassword
+    disable RegisterButton
+    set the content of RegisterMessage to `Registering...`
+    set style `color` of RegisterMessage to `#888`
+    put empty into ReceivedMessage
+    put `register` into Action
+    put ChatUsername cat `|` cat ChatPassword into MessageText
+    send to ServerTopic
+        sender MyTopic
+        action Action
+        message MessageText
+         ! confirm
+    gosub WaitForReply
+    if ReceivedMessage is empty
+    begin
+        gosub CheckRegisterFields
+        set the content of RegisterMessage to `No reply from server`
+        set style `color` of RegisterMessage to `#800`
+        stop
+    end
+    put position of `|` in ReceivedMessage into Pos
+    put left Pos of ReceivedMessage into ReplyStatus
+    add 1 to Pos
+    put from Pos of ReceivedMessage into ReplyBody
+    put empty into ReceivedMessage
+    if ReplyStatus is `ok`
+    begin
+        put ReplyBody into ChatUsername
+        put ChatUsername into storage as `chat-user`
+        put ChatPassword into storage as `chat-pass`
+        go to EnterChat
+    end
+    gosub CheckRegisterFields
+    set the content of RegisterMessage to ReplyBody
+    set style `color` of RegisterMessage to `#800`
+    put empty into ChatUsername
+    put empty into ChatPassword
+    stop
 
 ! ---- Chat main screen ----
 
 EnterChat:
     set the content of Status to `Logged in as ` cat ChatUsername
     set style `display` of LoginPanel to `none`
+    set style `display` of RegisterPanel to `none`
     set style `display` of ChatPanel to `flex`
     on click ShowTopicsButton gosub LoadTopics
     on click NewTopicToggle gosub ToggleNewTopic
@@ -349,6 +441,7 @@ LoadTopics:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -356,7 +449,7 @@ LoadTopics:
         return
     end
     put ReceivedMessage into TopicsJson
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     gosub RenderTopics
     return
 
@@ -433,6 +526,7 @@ CreateTopic:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -444,7 +538,7 @@ CreateTopic:
     put left Pos of ReceivedMessage into ReplyStatus
     add 1 to Pos
     put from Pos of ReceivedMessage into ReplyBody
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     if ReplyStatus is `ok`
     begin
         gosub HideNewTopic
@@ -473,6 +567,7 @@ ShowPosts:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -480,7 +575,7 @@ ShowPosts:
         return
     end
     put ReceivedMessage into PostsJson
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     gosub RenderPosts
     return
 
@@ -543,6 +638,7 @@ ViewPost:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -550,7 +646,7 @@ ViewPost:
         return
     end
     put ReceivedMessage into PostData
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     put element `post` of PostData into PostObj
     put element `subject` of PostObj into PSubject
     put element `author` of PostObj into PAuthor
@@ -623,6 +719,7 @@ SubmitPost:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -634,7 +731,7 @@ SubmitPost:
     put left Pos of ReceivedMessage into ReplyStatus
     add 1 to Pos
     put from Pos of ReceivedMessage into ReplyBody
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     if ReplyStatus is `ok`
     begin
         gosub HideNewPost
@@ -684,6 +781,7 @@ SubmitReply:
         sender MyTopic
         action Action
         message MessageText
+         ! confirm
     gosub WaitForReply
     if ReceivedMessage is empty
     begin
@@ -695,7 +793,7 @@ SubmitReply:
     put left Pos of ReceivedMessage into ReplyStatus
     add 1 to Pos
     put from Pos of ReceivedMessage into ReplyBody
-    clear ReceivedMessage
+    put empty into ReceivedMessage
     if ReplyStatus is `ok`
     begin
         gosub HideReply
@@ -722,6 +820,30 @@ WaitLoop:
     end
     wait 10 ticks
     go to WaitLoop
+
+CheckLoginFields:
+    if UsernameInput is not empty
+    begin
+        if PasswordInput is not empty
+        begin
+            enable LoginButton
+            return
+        end
+    end
+    disable LoginButton
+    return
+
+CheckRegisterFields:
+    if RegUsernameInput is not empty
+    begin
+        if RegPasswordInput is not empty
+        begin
+            enable RegisterButton
+            return
+        end
+    end
+    disable RegisterButton
+    return
 
 NoCredentials:
     set the content of Status to `No credentials provided`

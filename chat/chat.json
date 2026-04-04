@@ -5,7 +5,7 @@
     "font-family": "sans-serif",
     "margin": "2em",
     "max-width": "600px",
-    "#": ["$Title", "$Status", "$LoginPanel", "$ChatPanel"],
+    "#": ["$Title", "$Status", "$LoginPanel", "$RegisterPanel", "$ChatPanel"],
 
     "$Title": {
         "#element": "h2",
@@ -25,10 +25,18 @@
     "$LoginPanel": {
         "#element": "div",
         "@id": "login-panel",
-        "display": "flex",
+        "display": "none",
         "flex-direction": "column",
         "gap": "0.5em",
-        "#": ["$UsernameInput", "$PasswordInput", "$LoginButtons", "$LoginMessage"],
+        "#": ["$LoginTitle", "$UsernameInput", "$PasswordInput", "$LoginButton", "$ShowRegisterLink", "$LoginMessage"],
+
+        "$LoginTitle": {
+            "#element": "div",
+            "#content": "Log in",
+            "font-size": "1.2em",
+            "font-weight": "bold",
+            "padding-bottom": "0.3em"
+        },
 
         "$UsernameInput": {
             "#element": "input",
@@ -48,35 +56,95 @@
             "font-size": "1em"
         },
 
-        "$LoginButtons": {
-            "#element": "div",
-            "@id": "login-buttons",
-            "display": "flex",
-            "gap": "0.5em",
-            "#": ["$LoginButton", "$RegisterButton"],
+        "$LoginButton": {
+            "#element": "button",
+            "@id": "login-button",
+            "#content": "Log in",
+            "padding": "0.5em 1.5em",
+            "font-size": "1em",
+            "cursor": "pointer"
+        },
 
-            "$LoginButton": {
-                "#element": "button",
-                "@id": "login-button",
-                "#content": "Login",
-                "padding": "0.5em 1.5em",
-                "font-size": "1em",
-                "cursor": "pointer"
-            },
-
-            "$RegisterButton": {
-                "#element": "button",
-                "@id": "register-button",
-                "#content": "Register",
-                "padding": "0.5em 1.5em",
-                "font-size": "1em",
-                "cursor": "pointer"
-            }
+        "$ShowRegisterLink": {
+            "#element": "button",
+            "@id": "show-register-link",
+            "#content": "Don't have an account? Register",
+            "font-size": "0.9em",
+            "color": "#06c",
+            "background": "none",
+            "border": "none",
+            "cursor": "pointer",
+            "padding": "0.3em 0 0 0",
+            "text-align": "left"
         },
 
         "$LoginMessage": {
             "#element": "div",
             "@id": "login-message",
+            "padding": "0.5em",
+            "min-height": "1.5em"
+        }
+    },
+
+    "$RegisterPanel": {
+        "#element": "div",
+        "@id": "register-panel",
+        "display": "none",
+        "flex-direction": "column",
+        "gap": "0.5em",
+        "#": ["$RegisterTitle", "$RegUsernameInput", "$RegPasswordInput", "$RegisterButton", "$ShowLoginLink", "$RegisterMessage"],
+
+        "$RegisterTitle": {
+            "#element": "div",
+            "#content": "Create an account",
+            "font-size": "1.2em",
+            "font-weight": "bold",
+            "padding-bottom": "0.3em"
+        },
+
+        "$RegUsernameInput": {
+            "#element": "input",
+            "@id": "reg-username-input",
+            "@type": "text",
+            "@placeholder": "Choose a username",
+            "padding": "0.5em",
+            "font-size": "1em"
+        },
+
+        "$RegPasswordInput": {
+            "#element": "input",
+            "@id": "reg-password-input",
+            "@type": "password",
+            "@placeholder": "Choose a password",
+            "padding": "0.5em",
+            "font-size": "1em"
+        },
+
+        "$RegisterButton": {
+            "#element": "button",
+            "@id": "register-button",
+            "#content": "Register",
+            "padding": "0.5em 1.5em",
+            "font-size": "1em",
+            "cursor": "pointer"
+        },
+
+        "$ShowLoginLink": {
+            "#element": "button",
+            "@id": "show-login-link",
+            "#content": "Already have an account? Log in",
+            "font-size": "0.9em",
+            "color": "#06c",
+            "background": "none",
+            "border": "none",
+            "cursor": "pointer",
+            "padding": "0.3em 0 0 0",
+            "text-align": "left"
+        },
+
+        "$RegisterMessage": {
+            "#element": "div",
+            "@id": "register-message",
             "padding": "0.5em",
             "min-height": "1.5em"
         }

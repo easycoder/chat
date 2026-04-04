@@ -14,13 +14,14 @@
     variable Broker
     variable MqttUsername
     variable MqttPassword
-    variable MAC
+    variable SystemID
     variable SenderName
     variable SenderQoS
     variable Action
     variable MessageText
     dictionary CredDict
     variable Users
+    dictionary Config
     dictionary UsersDict
     variable ReqUser
     variable ReqPass
@@ -69,37 +70,41 @@
     	    or go to NoCredentials
     end
     put json Credentials into CredDict
-    log CredDict
+!    log CredDict
     put entry `broker` of CredDict into Broker
     put entry `username` of CredDict into MqttUsername
     put entry `password` of CredDict into MqttPassword
-    put entry `mac` of CredDict into MAC
     put entry `mail_server` of CredDict into MailServer
     put entry `mail_login` of CredDict into MailLogin
     put entry `mail_password` of CredDict into MailPassword
     put entry `mail_from` of CredDict into MailFrom
-    put MAC cat `/chat` into MAC
+
+    load Config from `chat-config.json`
+    put entry `id` of Config into SystemID
+    put SystemID cat `/chat` into SystemID
+    log `System ID is ` cat SystemID
 
     gosub to DoCheckUpdate
 
     ! Load user database
-    if file `chat/chat-users.json` exists
+    if file `chat-users.json` exists
     begin
-        load Users from `chat/chat-users.json`
+        load Users from `chat-users.json`
         put json Users into UsersDict
     end
+!    log UsersDict
 
     ! Ensure data directory exists
-    create directory `chat/chat-data`
-    create directory `chat/chat-data/topics`
+    create directory `chat-data`
+    create directory `chat-data/topics`
 
     print `Chat server starting...`
     print `Broker: ` cat Broker
-    print `Topic: ` cat MAC
+    print `Topic: ` cat SystemID
 
     ! Set up MQTT
     init ServerTopic
-        name MAC
+        name SystemID
         qos 1
 
     mqtt
@@ -174,9 +179,9 @@ DoCheckUpdate:
     begin
         print `Updating from version ` cat Version cat ` to ` cat RemoteVersion
         download `https://raw.githubusercontent.com/easycoder/chat/main/chat-server.ecs` to `chat-server.ecs`
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/index.html` to `chat/index.html`
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat-main.ecs` to `chat/chat-main.ecs`
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat.json` to `chat/chat.json`
+        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/index.html` to `index.html`
+        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat-main.ecs` to `chat-main.ecs`
+        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat.json` to `chat.json`
         save RemoteVersion to `.chat-version`
         print `Update complete. Restarting...`
         system background `sleep 2 && easycoder chat-server.ecs`
@@ -192,17 +197,26 @@ DoRegister:
     put left Pos of MessageText into ReqUser
     add 1 to Pos
     put from Pos of MessageText into ReqPass
+    print `Register request for: ` cat ReqUser  cat ` with password ` cat ReqPass
     put hash ReqPass into ReqPass
-    print `Register request for: ` cat ReqUser
     if UsersDict has entry ReqUser
     begin
-        put `error|Username already taken` into Reply
+        put entry ReqUser of UsersDict into StoredPass
+        if StoredPass is ReqPass
+        begin
+            put `ok|` cat ReqUser into Reply
+            print `Re-register (duplicate): ` cat ReqUser
+        end
+        else
+        begin
+            put `error|Username already taken` into Reply
+        end
     end
     else
     begin
         set entry ReqUser of UsersDict to ReqPass
         put UsersDict into Users
-        save Users to `chat/chat-users.json`
+        save Users to `chat-users.json`
         put `ok|` cat ReqUser into Reply
         print `Registered: ` cat ReqUser
     end
@@ -240,9 +254,9 @@ DoLogin:
 
 DoTopics:
     print `Topics request from ` cat SenderName
-    if file `chat/chat-data/topics.json` exists
+    if file `chat-data/topics.json` exists
     begin
-        load Reply from `chat/chat-data/topics.json`
+        load Reply from `chat-data/topics.json`
     end
     else put `[]` into Reply
     print `Sending topics: ` cat Reply
@@ -260,7 +274,7 @@ DoNewTopic:
     add 1 to Pos
     put from Pos of MessageText into TopicDesc
     print `New topic request: ` cat TopicName cat ` by ` cat TopicCreator
-    put `chat/chat-data/topics/` cat TopicName into TopicPath
+    put `chat-data/topics/` cat TopicName into TopicPath
     if file TopicPath exists
     begin
         put `error|Topic already exists` into Reply
@@ -272,7 +286,7 @@ DoNewTopic:
     put `{"name":"` cat TopicName cat `","description":"` cat TopicDesc cat `","creator":"` cat TopicCreator cat `"}` into TopicMeta
     save TopicMeta to TopicPath cat `/topic.json`
     ! Update the topic index
-    if file `chat/chat-data/topics.json` exists load TopicIndex from `chat/chat-data/topics.json`
+    if file `chat-data/topics.json` exists load TopicIndex from `chat-data/topics.json`
     else put `[]` into TopicIndex
     ! Remove trailing ] and append new entry
     put the length of TopicIndex into Pos
@@ -280,7 +294,7 @@ DoNewTopic:
     put left Pos of TopicIndex into TopicIndex
     if TopicIndex is not `[` put TopicIndex cat `,` into TopicIndex
     put TopicIndex cat `{"name":"` cat TopicName cat `","description":"` cat TopicDesc cat `"}]` into TopicIndex
-    save TopicIndex to `chat/chat-data/topics.json`
+    save TopicIndex to `chat-data/topics.json`
     put `ok|` cat TopicName into Reply
     print `Created topic: ` cat TopicName
     gosub to SendReply
@@ -295,7 +309,7 @@ DoView:
     add 1 to Pos
     put from Pos of MessageText into PostId
     print `View post ` cat PostId cat ` in ` cat TopicName
-    put `chat/chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/post.json` into PostsPath
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/post.json` into PostsPath
     if file PostsPath does not exist
     begin
         put `error|Post not found` into Reply
@@ -304,7 +318,7 @@ DoView:
     end
     load PostContent from PostsPath
     ! Check for replies
-    put `chat/chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/replies.json` into PostsPath
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/replies.json` into PostsPath
     if file PostsPath exists
     begin
         load PostsIndex from PostsPath
@@ -322,7 +336,7 @@ DoView:
 DoPosts:
     ! MessageText is the topic name
     print `Posts request for topic: ` cat MessageText
-    put `chat/chat-data/topics/` cat MessageText cat `/posts.json` into PostsPath
+    put `chat-data/topics/` cat MessageText cat `/posts.json` into PostsPath
     if file PostsPath exists
     begin
         load Reply from PostsPath
@@ -346,7 +360,7 @@ DoPost:
     add 1 to Pos
     put from Pos of MessageText into PostBody
     print `New post in ` cat TopicName cat ` by ` cat PostAuthor cat `: ` cat PostSubject
-    put `chat/chat-data/topics/` cat TopicName into TopicPath
+    put `chat-data/topics/` cat TopicName into TopicPath
     if file TopicPath does not exist
     begin
         put `error|Topic not found` into Reply
@@ -411,7 +425,7 @@ DoReply:
         return
     end
     ! Build parent path
-    put `chat/chat-data/topics/` cat TopicName cat `/posts/` cat PostId into ParentPath
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId into ParentPath
     if file ParentPath does not exist
     begin
         put `error|Parent post not found` into Reply
