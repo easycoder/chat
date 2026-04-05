@@ -686,7 +686,7 @@ ViewPost:
     put element `id` of PostObj into PTimestamp
     gosub FormatTimestamp
     set the content of PostViewSubject to PSubject
-    set the content of PostViewAuthor to `by ` cat PAuthor cat ` &mdash; ` cat PDate
+    set the content of PostViewAuthor to `by ` cat PAuthor cat ` at ` cat PDate
     set the content of PostViewBody to PBody
     if PAuthor is ChatUsername
     begin
