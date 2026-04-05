@@ -23,16 +23,17 @@
     variable WaitCount
     topic MyTopic
     topic ServerTopic
+    
+!    debug step
 
     ! Get MQTT credentials
     rest get Credentials from `../credentials`
     or begin
-        rest get Credentials from `../credentials.php`
-        or begin
-            alert `Cannot load credentials`
-            stop
-        end
+        rest get Credentials from `../credentials.php` or alert `Cannot load credentials`
+        go to GotCredentials
     end
+
+GotCredentials:
     put element `broker` of Credentials into Broker
     put element `username` of Credentials into MqttUsername
     put element `password` of Credentials into MqttPassword
@@ -67,6 +68,7 @@
         put the mqtt message into ReceivedMessage
     end
 
+    log `Waiting for MQTT to connect`
     stop
 
 RequestScript:

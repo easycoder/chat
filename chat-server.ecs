@@ -61,6 +61,7 @@
     variable Version
     variable RemoteVersion
     variable FileUrl
+    variable NextUpdateCheck
 
     ! Load credentials
 	if file `credentials` exists load Credentials from `credentials`
@@ -85,6 +86,8 @@
     log `System ID is ` cat SystemID
 
     gosub to DoCheckUpdate
+    put now into NextUpdateCheck
+    add 3600000 to NextUpdateCheck
 
     ! Load user database
     if file `chat-users.json` exists
@@ -121,6 +124,12 @@
     while true
     begin
         wait 50 ticks
+        if now is greater than NextUpdateCheck
+        begin
+            gosub to DoCheckUpdate
+            put now into NextUpdateCheck
+            add 3600000 to NextUpdateCheck
+        end
         if MessageQueue is not empty
         begin
             pop ReceivedMessage from MessageQueue
@@ -145,9 +154,11 @@
                 else if Action is `posts` gosub to DoPosts
                 else if Action is `post` gosub to DoPost
                 else if Action is `reply` gosub to DoReply
+                else if Action is `edit-post` gosub to DoEditPost
+                else if Action is `delete-post` gosub to DoDeletePost
+                else if Action is `delete-reply` gosub to DoDeleteReply
                 else if Action is `sendemail` gosub to DoSendEmail
                 else if Action is `get-file` gosub to DoGetFile
-                else if Action is `check-update` gosub to DoCheckUpdate
                 else print `Unknown action: ` cat Action
             end
         end
@@ -164,6 +175,11 @@ DoPing:
 ! ---- Check for updates ----
 
 DoCheckUpdate:
+    if file `credentials.json` exists
+    begin
+        print `Dev environment detected - skipping update check`
+        return
+    end
     get RemoteVersion from url `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat-version`
         or begin
             print `Warning: could not check for updates`
@@ -184,8 +200,7 @@ DoCheckUpdate:
         download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat.json` to `chat.json`
         save RemoteVersion to `.chat-version`
         print `Update complete. Restarting...`
-        system background `sleep 2 && easycoder chat-server.ecs`
-        exit
+        system background `sleep 1; pkill -f "easycoder chat-server.ecs"; sleep 2; easycoder chat-server.ecs`
     end
     else print `Chat server version ` cat Version cat ` is up to date`
     return
@@ -460,6 +475,212 @@ DoReply:
     save RepliesIndex to PostsPath
     put `ok|` cat ReplyId into Reply
     print `Created reply ` cat ReplyId
+    gosub to SendReply
+    return
+
+! ---- Edit post ----
+
+DoEditPost:
+    ! MessageText is "topicname|postid|username|subject|body"
+    put position of `|` in MessageText into Pos
+    put left Pos of MessageText into TopicName
+    add 1 to Pos
+    put from Pos of MessageText into MessageText
+    put position of `|` in MessageText into Pos2
+    put left Pos2 of MessageText into PostId
+    add 1 to Pos2
+    put from Pos2 of MessageText into MessageText
+    put position of `|` in MessageText into Pos
+    put left Pos of MessageText into PostAuthor
+    add 1 to Pos
+    put from Pos of MessageText into MessageText
+    put position of `|` in MessageText into Pos2
+    put left Pos2 of MessageText into PostSubject
+    add 1 to Pos2
+    put from Pos2 of MessageText into PostBody
+    print `Edit post ` cat PostId cat ` in ` cat TopicName cat ` by ` cat PostAuthor
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId into PostDirPath
+    if file PostDirPath does not exist
+    begin
+        put `error|Post not found` into Reply
+        gosub to SendReply
+        return
+    end
+    ! Verify the author matches
+    load PostContent from PostDirPath cat `/post.json`
+    put `"author":"` cat PostAuthor cat `"` into PostMeta
+    if PostContent does not include PostMeta
+    begin
+        put `error|You can only edit your own posts` into Reply
+        gosub to SendReply
+        return
+    end
+    ! Update the post file
+    put `{"id":"` cat PostId
+        cat `","subject":"` cat PostSubject
+        cat `","author":"` cat PostAuthor
+        cat `","body":"` cat PostBody
+        cat `"}` into PostContent
+    save PostContent to PostDirPath cat `/post.json`
+    ! Update the posts index with new subject
+    put `chat-data/topics/` cat TopicName cat `/posts.json` into PostsPath
+    if file PostsPath exists
+    begin
+        load PostsIndex from PostsPath
+        ! Find and replace the entry for this post ID
+        put `"id":"` cat PostId cat `","subject":"` into PostMeta
+        put position of PostMeta in PostsIndex into Pos
+        if Pos is not -1
+        begin
+            ! Find the end of the old subject value
+            add the length of PostMeta to Pos
+            put from Pos of PostsIndex into PostContent
+            put position of `"` in PostContent into Pos2
+            add Pos to Pos2
+            ! Rebuild: everything before subject value + new subject + everything from closing quote
+            put left Pos of PostsIndex into PostContent
+            put PostContent cat PostSubject cat from Pos2 of PostsIndex into PostsIndex
+            save PostsIndex to PostsPath
+        end
+    end
+    put `ok|` cat PostId into Reply
+    print `Edited post ` cat PostId cat ` in ` cat TopicName
+    gosub to SendReply
+    return
+
+! ---- Delete post ----
+
+DoDeletePost:
+    ! MessageText is "topicname|postid|username"
+    put position of `|` in MessageText into Pos
+    put left Pos of MessageText into TopicName
+    add 1 to Pos
+    put from Pos of MessageText into MessageText
+    put position of `|` in MessageText into Pos2
+    put left Pos2 of MessageText into PostId
+    add 1 to Pos2
+    put from Pos2 of MessageText into PostAuthor
+    print `Delete post ` cat PostId cat ` in ` cat TopicName cat ` by ` cat PostAuthor
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId into PostDirPath
+    if file PostDirPath does not exist
+    begin
+        put `error|Post not found` into Reply
+        gosub to SendReply
+        return
+    end
+    ! Verify the author matches
+    load PostContent from PostDirPath cat `/post.json`
+    put `"author":"` cat PostAuthor cat `"` into PostMeta
+    if PostContent does not include PostMeta
+    begin
+        put `error|You can only delete your own posts` into Reply
+        gosub to SendReply
+        return
+    end
+    ! Delete the post directory
+    delete directory PostDirPath
+    ! Update the posts index
+    put `chat-data/topics/` cat TopicName cat `/posts.json` into PostsPath
+    if file PostsPath exists
+    begin
+        load PostsIndex from PostsPath
+        ! Find the entry for this post ID and remove it
+        put `{"id":"` cat PostId into PostMeta
+        put position of PostMeta in PostsIndex into Pos
+        if Pos is not -1
+        begin
+            ! Find the end of this entry (next })
+            put from Pos of PostsIndex into PostContent
+            put position of `}` in PostContent into Pos2
+            add 1 to Pos2
+            add Pos to Pos2
+            ! Get everything before this entry
+            put left Pos of PostsIndex into PostContent
+            ! Get everything after this entry
+            put from Pos2 of PostsIndex into PostMeta
+            ! Handle comma between entries
+            put the length of PostContent into Pos
+            take 1 from Pos
+            put from Pos of PostContent into ReplyMeta
+            if left 1 of ReplyMeta is `,` put left Pos of PostContent into PostContent
+            else if left 1 of PostMeta is `,` put from 1 of PostMeta into PostMeta
+            put PostContent cat PostMeta into PostsIndex
+            save PostsIndex to PostsPath
+        end
+    end
+    put `ok|` cat PostId into Reply
+    print `Deleted post ` cat PostId cat ` in ` cat TopicName
+    gosub to SendReply
+    return
+
+! ---- Delete reply ----
+
+DoDeleteReply:
+    ! MessageText is "topicname|postid|replyid|username"
+    put position of `|` in MessageText into Pos
+    put left Pos of MessageText into TopicName
+    add 1 to Pos
+    put from Pos of MessageText into MessageText
+    put position of `|` in MessageText into Pos2
+    put left Pos2 of MessageText into PostId
+    add 1 to Pos2
+    put from Pos2 of MessageText into MessageText
+    put position of `|` in MessageText into Pos
+    put left Pos of MessageText into ReplyId
+    add 1 to Pos
+    put from Pos of MessageText into ReplyAuthor
+    print `Delete reply ` cat ReplyId cat ` in ` cat TopicName cat `/` cat PostId cat ` by ` cat ReplyAuthor
+    ! Check the reply exists
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/replies/` cat ReplyId into PostDirPath
+    if file PostDirPath does not exist
+    begin
+        put `error|Reply not found` into Reply
+        gosub to SendReply
+        return
+    end
+    ! Verify the user is either the reply author or the post owner
+    load PostContent from PostDirPath cat `/post.json`
+    put `"author":"` cat ReplyAuthor cat `"` into PostMeta
+    if PostContent does not include PostMeta
+    begin
+        ! Check if user is the post owner
+        put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/post.json` into PostsPath
+        load PostContent from PostsPath
+        if PostContent does not include PostMeta
+        begin
+            put `error|You can only delete your own replies` into Reply
+            gosub to SendReply
+            return
+        end
+    end
+    ! Delete the reply directory
+    delete directory PostDirPath
+    ! Update the replies index
+    put `chat-data/topics/` cat TopicName cat `/posts/` cat PostId cat `/replies.json` into PostsPath
+    if file PostsPath exists
+    begin
+        load RepliesIndex from PostsPath
+        put `{"id":"` cat ReplyId into PostMeta
+        put position of PostMeta in RepliesIndex into Pos
+        if Pos is not -1
+        begin
+            put from Pos of RepliesIndex into PostContent
+            put position of `}` in PostContent into Pos2
+            add 1 to Pos2
+            add Pos to Pos2
+            put left Pos of RepliesIndex into PostContent
+            put from Pos2 of RepliesIndex into PostMeta
+            put the length of PostContent into Pos
+            take 1 from Pos
+            put from Pos of PostContent into ReplyMeta
+            if left 1 of ReplyMeta is `,` put left Pos of PostContent into PostContent
+            else if left 1 of PostMeta is `,` put from 1 of PostMeta into PostMeta
+            put PostContent cat PostMeta into RepliesIndex
+            save RepliesIndex to PostsPath
+        end
+    end
+    put `ok|` cat ReplyId into Reply
+    print `Deleted reply ` cat ReplyId cat ` in ` cat TopicName cat `/` cat PostId
     gosub to SendReply
     return
 

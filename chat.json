@@ -5,34 +5,21 @@
     "font-family": "sans-serif",
     "margin": "2em",
     "max-width": "600px",
-    "#": ["$Header", "$LoginPanel", "$RegisterPanel", "$ChatPanel"],
+    "#": ["$Title", "$Status", "$LoginPanel", "$RegisterPanel", "$ChatPanel"],
 
-    "$Header": {
+    "$Title": {
+        "#element": "h2",
+        "@id": "title",
+        "#content": "Chat"
+    },
+
+    "$Status": {
         "#element": "div",
-        "@id": "header",
-        "display": "flex",
-        "align-items": "baseline",
-        "gap": "1em",
+        "@id": "status",
+        "padding": "0.5em",
         "margin-bottom": "1em",
-        "#": ["$Title", "$Status"],
-
-        "$Title": {
-            "#element": "h2",
-            "@id": "title",
-            "#content": "Chat",
-            "margin": "0",
-            "display": "inline-block"
-        },
-
-        "$Status": {
-            "#element": "div",
-            "@id": "status",
-            "color": "#800",
-            "font-size": "0.9em",
-            "display": "inline-block",
-            "margin-left": "1em",
-            "#content": "Connecting..."
-        }
+        "color": "#800",
+        "#content": "Connecting..."
     },
 
     "$LoginPanel": {
@@ -175,47 +162,26 @@
             "#element": "div",
             "@id": "topic-bar",
             "display": "flex",
-            "align-items": "center",
-            "justify-content": "space-between",
-            "background": "#444",
-            "color": "#fff",
-            "padding": "0.5em 1em",
+            "gap": "0.5em",
             "margin-bottom": "0.5em",
-            "#": ["$TopicBarTitle", "$TopicBarButtons"],
+            "#": ["$ShowTopicsButton", "$NewTopicToggle"],
 
-            "$TopicBarTitle": {
-                "#element": "div",
-                "@id": "topic-bar-title",
-                "#content": "Topics",
-                "font-weight": "bold",
-                "font-size": "1.1em"
+            "$ShowTopicsButton": {
+                "#element": "button",
+                "@id": "show-topics-button",
+                "#content": "Show Topics",
+                "padding": "0.5em 1.5em",
+                "font-size": "1em",
+                "cursor": "pointer"
             },
 
-            "$TopicBarButtons": {
-                "#element": "div",
-                "@id": "topic-bar-buttons",
-                "display": "flex",
-                "gap": "0.5em",
-                "#": ["$NewPostToggle", "$NewTopicToggle"],
-
-                "$NewPostToggle": {
-                    "#element": "button",
-                    "@id": "new-post-toggle",
-                    "#content": "New Post",
-                    "padding": "0.4em 1.2em",
-                    "font-size": "0.9em",
-                    "cursor": "pointer",
-                    "display": "none"
-                },
-
-                "$NewTopicToggle": {
-                    "#element": "button",
-                    "@id": "new-topic-toggle",
-                    "#content": "New Topic",
-                    "padding": "0.4em 1.2em",
-                    "font-size": "0.9em",
-                    "cursor": "pointer"
-                }
+            "$NewTopicToggle": {
+                "#element": "button",
+                "@id": "new-topic-toggle",
+                "#content": "New Topic",
+                "padding": "0.5em 1.5em",
+                "font-size": "1em",
+                "cursor": "pointer"
             }
         },
 
@@ -298,7 +264,41 @@
             "display": "none",
             "flex-direction": "column",
             "gap": "0.5em",
-            "#": ["$PostListPanel", "$NewPostPanel", "$PostViewPanel"],
+            "#": ["$PostsBar", "$PostListPanel", "$NewPostPanel", "$PostViewPanel"],
+
+            "$PostsBar": {
+                "#element": "div",
+                "@id": "posts-bar",
+                "display": "flex",
+                "gap": "0.5em",
+                "align-items": "center",
+                "#": ["$BackToTopicsButton", "$PostsTopicTitle", "$NewPostToggle"],
+
+                "$BackToTopicsButton": {
+                    "#element": "button",
+                    "@id": "back-to-topics",
+                    "#content": "Back",
+                    "padding": "0.5em 1.5em",
+                    "font-size": "1em",
+                    "cursor": "pointer"
+                },
+
+                "$PostsTopicTitle": {
+                    "#element": "div",
+                    "@id": "posts-topic-title",
+                    "font-weight": "bold",
+                    "flex": "1"
+                },
+
+                "$NewPostToggle": {
+                    "#element": "button",
+                    "@id": "new-post-toggle",
+                    "#content": "New Post",
+                    "padding": "0.5em 1.5em",
+                    "font-size": "1em",
+                    "cursor": "pointer"
+                }
+            },
 
             "$PostListPanel": {
                 "#element": "div",
@@ -381,74 +381,49 @@
                 "display": "none",
                 "flex-direction": "column",
                 "gap": "0.5em",
-                "#": ["$PostViewSubject", "$PostViewMeta", "$PostViewBody", "$EditPostPanel", "$PostRepliesPanel", "$ReplyPanel"],
+                "#": ["$PostViewBar", "$PostViewSubject", "$PostViewMeta", "$PostViewBody", "$PostRepliesPanel", "$ReplyPanel"],
+
+                "$PostViewBar": {
+                    "#element": "div",
+                    "@id": "post-view-bar",
+                    "display": "flex",
+                    "gap": "0.5em",
+                    "#": ["$BackToPostsButton", "$ReplyToggle"],
+
+                    "$BackToPostsButton": {
+                        "#element": "button",
+                        "@id": "back-to-posts",
+                        "#content": "Back",
+                        "padding": "0.5em 1.5em",
+                        "font-size": "1em",
+                        "cursor": "pointer"
+                    },
+
+                    "$ReplyToggle": {
+                        "#element": "button",
+                        "@id": "reply-toggle",
+                        "#content": "Reply",
+                        "padding": "0.5em 1.5em",
+                        "font-size": "1em",
+                        "cursor": "pointer"
+                    }
+                },
 
                 "$PostViewSubject": {
                     "#element": "div",
                     "@id": "post-view-subject",
                     "font-weight": "bold",
                     "font-size": "1.2em",
-                    "padding": "0.5em 0 0 0"
+                    "padding": "0.5em 0"
                 },
 
                 "$PostViewMeta": {
                     "#element": "div",
                     "@id": "post-view-meta",
-                    "display": "flex",
-                    "align-items": "center",
-                    "justify-content": "space-between",
                     "color": "#666",
                     "font-size": "0.9em",
                     "padding-bottom": "0.5em",
-                    "border-bottom": "1px solid #ccc",
-                    "#": ["$PostViewAuthor", "$PostViewActions"],
-
-                    "$PostViewAuthor": {
-                        "#element": "div",
-                        "@id": "post-view-author"
-                    },
-
-                    "$PostViewActions": {
-                        "#element": "div",
-                        "@id": "post-view-actions",
-                        "display": "flex",
-                        "gap": "1em",
-                        "#": ["$EditPostLink", "$DeletePostLink", "$ReplyToggle", "$BackToPostsLink"],
-
-                        "$EditPostLink": {
-                            "#element": "span",
-                            "@id": "edit-post-link",
-                            "#content": "Edit",
-                            "cursor": "pointer",
-                            "color": "#06c",
-                            "display": "none"
-                        },
-
-                        "$DeletePostLink": {
-                            "#element": "span",
-                            "@id": "delete-post-link",
-                            "#content": "Delete",
-                            "cursor": "pointer",
-                            "color": "#c00",
-                            "display": "none"
-                        },
-
-                        "$ReplyToggle": {
-                            "#element": "span",
-                            "@id": "reply-toggle",
-                            "#content": "Reply",
-                            "cursor": "pointer",
-                            "color": "#06c"
-                        },
-
-                        "$BackToPostsLink": {
-                            "#element": "span",
-                            "@id": "back-to-posts",
-                            "#content": "Back",
-                            "cursor": "pointer",
-                            "color": "#06c"
-                        }
-                    }
+                    "border-bottom": "1px solid #ccc"
                 },
 
                 "$PostViewBody": {
@@ -457,69 +432,6 @@
                     "padding": "1em 0",
                     "white-space": "pre-wrap",
                     "line-height": "1.5"
-                },
-
-                "$EditPostPanel": {
-                    "#element": "div",
-                    "@id": "edit-post-panel",
-                    "display": "none",
-                    "flex-direction": "column",
-                    "gap": "0.5em",
-                    "border": "1px solid #ccc",
-                    "padding": "0.5em",
-                    "background": "#ffe",
-                    "#": ["$EditPostSubject", "$EditPostBody", "$EditPostButtons", "$EditPostMessage"],
-
-                    "$EditPostSubject": {
-                        "#element": "input",
-                        "@id": "edit-post-subject",
-                        "@type": "text",
-                        "padding": "0.5em",
-                        "font-size": "1em"
-                    },
-
-                    "$EditPostBody": {
-                        "#element": "textarea",
-                        "@id": "edit-post-body",
-                        "@rows": "5",
-                        "padding": "0.5em",
-                        "font-size": "1em",
-                        "width": "calc(100% - 1em)",
-                        "resize": "vertical"
-                    },
-
-                    "$EditPostButtons": {
-                        "#element": "div",
-                        "@id": "edit-post-buttons",
-                        "display": "flex",
-                        "gap": "0.5em",
-                        "#": ["$SaveEditButton", "$CancelEditButton"],
-
-                        "$SaveEditButton": {
-                            "#element": "button",
-                            "@id": "save-edit-button",
-                            "#content": "Save",
-                            "padding": "0.5em 1.5em",
-                            "font-size": "1em",
-                            "cursor": "pointer"
-                        },
-
-                        "$CancelEditButton": {
-                            "#element": "button",
-                            "@id": "cancel-edit-button",
-                            "#content": "Cancel",
-                            "padding": "0.5em 1.5em",
-                            "font-size": "1em",
-                            "cursor": "pointer"
-                        }
-                    },
-
-                    "$EditPostMessage": {
-                        "#element": "div",
-                        "@id": "edit-post-message",
-                        "padding": "0.5em",
-                        "min-height": "1.5em"
-                    }
                 },
 
                 "$PostRepliesPanel": {
