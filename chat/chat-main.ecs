@@ -106,6 +106,9 @@
     variable RId
     variable ReplyDeleteCount
     variable ReplyDeleteIds
+    variable PTimestamp
+    variable PDate
+    variable PDPart
 
 !    debug step
 
@@ -680,8 +683,10 @@ ViewPost:
     put element `subject` of PostObj into PSubject
     put element `author` of PostObj into PAuthor
     put element `body` of PostObj into PBody
+    put element `id` of PostObj into PTimestamp
+    gosub FormatTimestamp
     set the content of PostViewSubject to PSubject
-    set the content of PostViewAuthor to `by ` cat PAuthor
+    set the content of PostViewAuthor to `by ` cat PAuthor cat ` &mdash; ` cat PDate
     set the content of PostViewBody to PBody
     if PAuthor is ChatUsername
     begin
@@ -1006,6 +1011,29 @@ DoDeleteReply:
         if ReplyStatus is `ok` gosub ViewPost
         else alert ReplyBody
     end
+    return
+
+! ---- Format timestamp as YYYY/MM/DD HH:MM:SS ----
+
+FormatTimestamp:
+    put year of PTimestamp into PDate
+    put PDate cat `/` into PDate
+    put month number of PTimestamp into PDPart
+    add 1 to PDPart
+    if PDPart is less than 10 put PDate cat `0` into PDate
+    put PDate cat PDPart cat `/` into PDate
+    put day number of PTimestamp into PDPart
+    if PDPart is less than 10 put PDate cat `0` into PDate
+    put PDate cat PDPart cat ` ` into PDate
+    put hour of PTimestamp into PDPart
+    if PDPart is less than 10 put PDate cat `0` into PDate
+    put PDate cat PDPart cat `:` into PDate
+    put minute of PTimestamp into PDPart
+    if PDPart is less than 10 put PDate cat `0` into PDate
+    put PDate cat PDPart cat `:` into PDate
+    put second of PTimestamp into PDPart
+    if PDPart is less than 10 put PDate cat `0` into PDate
+    put PDate cat PDPart into PDate
     return
 
 ! ---- Shared ----
