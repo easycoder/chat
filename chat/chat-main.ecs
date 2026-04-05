@@ -182,6 +182,7 @@ GotCredentials:
 
 FetchLayout:
     rest get Layout from `chat.json`
+    or rest get Layout from `chat/chat.json`
     or begin
         alert `Could not load chat.json`
         stop
