@@ -386,6 +386,10 @@ DoPost:
     put now into PostId
     put TopicPath cat `/posts/` cat PostId into PostDirPath
     create directory PostDirPath
+    ! Encode subject and body for safe JSON storage
+    set encoding to `base64`
+    put encode PostSubject into PostSubject
+    put encode PostBody into PostBody
     ! Save the post
     put `{"id":"` cat PostId
         cat `","subject":"` cat PostSubject
@@ -452,6 +456,9 @@ DoReply:
     put ParentPath cat `/replies/` cat ReplyId into PostDirPath
     create directory PostDirPath
     add 1 to Depth
+    ! Encode reply body for safe JSON storage
+    set encoding to `base64`
+    put encode ReplyBody2 into ReplyBody2
     put `{"id":"` cat ReplyId
         cat `","subject":"Re"`
         cat `,"author":"` cat ReplyAuthor
@@ -459,7 +466,7 @@ DoReply:
         cat `","depth":` cat Depth
         cat `}` into ReplyMeta
     save ReplyMeta to PostDirPath cat `/post.json`
-    ! Update replies index
+    ! Update replies index — preview is also encoded
     put ParentPath cat `/replies.json` into PostsPath
     if file PostsPath exists load RepliesIndex from PostsPath
     else put `[]` into RepliesIndex
@@ -467,9 +474,10 @@ DoReply:
     take 1 from Pos
     put left Pos of RepliesIndex into RepliesIndex
     if RepliesIndex is not `[` put RepliesIndex cat `,` into RepliesIndex
+    put left 50 of ReplyBody2 into ReplyMeta
     put RepliesIndex cat `{"id":"` cat ReplyId
         cat `","author":"` cat ReplyAuthor
-        cat `","preview":"` cat left 50 of ReplyBody2
+        cat `","preview":"` cat ReplyMeta
         cat `","depth":` cat Depth
         cat `}]` into RepliesIndex
     save RepliesIndex to PostsPath
@@ -515,6 +523,10 @@ DoEditPost:
         gosub to SendReply
         return
     end
+    ! Encode subject and body for safe JSON storage
+    set encoding to `base64`
+    put encode PostSubject into PostSubject
+    put encode PostBody into PostBody
     ! Update the post file
     put `{"id":"` cat PostId
         cat `","subject":"` cat PostSubject

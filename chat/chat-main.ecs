@@ -621,6 +621,8 @@ RenderPosts:
     begin
         put element N of PostsJson into PEntry
         put element `subject` of PEntry into PSubject
+        set encoding to `base64`
+        decode PSubject
         put element `author` of PEntry into PAuthor
         put PostMarkup cat `<button id="PostItem-` cat N
             cat `" style="display:block;width:100%;text-align:left;padding:0.4em;margin-bottom:0.3em;cursor:pointer">`
@@ -685,6 +687,10 @@ ViewPost:
     put element `author` of PostObj into PAuthor
     put element `body` of PostObj into PBody
     put element `id` of PostObj into PTimestamp
+    ! Decode base64-encoded subject and body
+    set encoding to `base64`
+    decode PSubject
+    decode PBody
     gosub FormatTimestamp
     set the content of PostViewSubject to PSubject
     set the content of PostViewAuthor to `by ` cat PAuthor cat ` at ` cat PTime cat ` on ` cat PDate
@@ -715,6 +721,8 @@ RenderReplies:
         put element N of RepliesJson into REntry
         put element `author` of REntry into RAuthor
         put element `preview` of REntry into RPreview
+        set encoding to `base64`
+        decode RPreview
         put element `id` of REntry into RId
         put RepliesMarkup
             cat `<div style="padding:0.3em 0 0.3em 1em;border-left:2px solid #ccc;margin-bottom:0.3em">`
