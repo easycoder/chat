@@ -62,6 +62,7 @@
     variable RemoteVersion
     variable FileUrl
     variable NextUpdateCheck
+    variable ServerScript
 
     ! Load credentials
 	if file `credentials` exists load Credentials from `credentials`
@@ -82,6 +83,7 @@
 
     load Config from `chat-config.json`
     put entry `id` of Config into SystemID
+    put SystemID cat `-chat-server` into ServerScript
     put SystemID cat `/chat` into SystemID
     log `System ID is ` cat SystemID
 
@@ -194,13 +196,8 @@ DoCheckUpdate:
     if RemoteVersion is greater than Version
     begin
         print `Updating from version ` cat Version cat ` to ` cat RemoteVersion
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat-server.ecs` to `chat-server.ecs`
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/index.html` to `index.html`
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat-main.ecs` to `chat-main.ecs`
-        download `https://raw.githubusercontent.com/easycoder/chat/main/chat/chat.json` to `chat.json`
         save RemoteVersion to `.chat-version`
-        print `Update complete. Restarting...`
-        system background `sleep 1; pkill -f "easycoder chat-server.ecs"; sleep 2; easycoder chat-server.ecs`
+        system background `sleep 1; ./run-server.sh`
     end
     else print `Chat server version ` cat Version cat ` is up to date`
     return
