@@ -27,13 +27,16 @@
 !    debug step
 
     ! Get MQTT credentials
-    rest get Credentials from `../credentials`
+    log `GET ../credentials.json`
+    rest get Credentials from `../credentials.json`
     or begin
+    	log `That failed, so GET ../credentials.php`
         rest get Credentials from `../credentials.php` or alert `Cannot load credentials`
         go to GotCredentials
     end
 
 GotCredentials:
+    log Credentials
     put element `broker` of Credentials into Broker
     put element `username` of Credentials into MqttUsername
     put element `password` of Credentials into MqttPassword
@@ -42,6 +45,7 @@ GotCredentials:
     rest get ChatConfig from `chat-config.json`
     put element `id` of ChatConfig into SystemID
     put SystemID cat `/chat` into SystemID
+    log `System ID is ` cat SystemID
 
     ! Connect to MQTT
     put `Loader-` cat random 999999 into MyID
@@ -72,6 +76,7 @@ GotCredentials:
     stop
 
 RequestScript:
+    log `Request the main script`
     send to ServerTopic
         sender MyTopic
         action `get-file`

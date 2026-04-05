@@ -181,12 +181,27 @@ GotCredentials:
 ! ---- Fetch layout from server ----
 
 FetchLayout:
+    put empty into ReceivedMessage
+    put `get-file` into Action
+    put `chat.json` into MessageText
+    send to ServerTopic
+        sender MyTopic
+        action Action
+        message MessageText
+    gosub WaitForReply
+    if ReceivedMessage is not empty
+    begin
+        put ReceivedMessage into Layout
+        put empty into ReceivedMessage
+        go to GotLayout
+    end
     rest get Layout from `chat.json`
     or rest get Layout from `chat/chat.json`
     or begin
         alert `Could not load chat.json`
         stop
     end
+GotLayout:
 
     create Body
     render Layout in Body
