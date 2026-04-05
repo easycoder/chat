@@ -108,6 +108,7 @@
     variable ReplyDeleteIds
     variable PTimestamp
     variable PDate
+    variable PTime
     variable PDPart
 
 !    debug step
@@ -686,7 +687,7 @@ ViewPost:
     put element `id` of PostObj into PTimestamp
     gosub FormatTimestamp
     set the content of PostViewSubject to PSubject
-    set the content of PostViewAuthor to `by ` cat PAuthor cat ` at ` cat PDate
+    set the content of PostViewAuthor to `by ` cat PAuthor cat ` at ` cat PTime cat ` on ` cat PDate
     set the content of PostViewBody to PBody
     if PAuthor is ChatUsername
     begin
@@ -1025,16 +1026,17 @@ FormatTimestamp:
     put PDate cat PDPart cat `/` into PDate
     put day number of PTimestamp into PDPart
     if PDPart is less than 10 put PDate cat `0` into PDate
-    put PDate cat PDPart cat ` ` into PDate
-    put hour of PTimestamp into PDPart
-    if PDPart is less than 10 put PDate cat `0` into PDate
-    put PDate cat PDPart cat `:` into PDate
-    put minute of PTimestamp into PDPart
-    if PDPart is less than 10 put PDate cat `0` into PDate
-    put PDate cat PDPart cat `:` into PDate
-    put second of PTimestamp into PDPart
-    if PDPart is less than 10 put PDate cat `0` into PDate
     put PDate cat PDPart into PDate
+    put hour of PTimestamp into PDPart
+    if PDPart is less than 10 put `0` into PTime
+    else put `` into PTime
+    put PTime cat PDPart cat `:` into PTime
+    put minute of PTimestamp into PDPart
+    if PDPart is less than 10 put PTime cat `0` into PTime
+    put PTime cat PDPart cat `:` into PTime
+    put second of PTimestamp into PDPart
+    if PDPart is less than 10 put PTime cat `0` into PTime
+    put PTime cat PDPart into PTime
     return
 
 ! ---- Shared ----
