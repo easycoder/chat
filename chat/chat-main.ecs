@@ -1016,6 +1016,7 @@ DoDeleteReply:
 ! ---- Format timestamp as YYYY/MM/DD HH:MM:SS ----
 
 FormatTimestamp:
+    divide PTimestamp by 1000
     put year of PTimestamp into PDate
     put PDate cat `/` into PDate
     put month number of PTimestamp into PDPart
