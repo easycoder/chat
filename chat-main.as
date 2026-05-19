@@ -1,6 +1,12 @@
-!   chat-main.ecs - Chat client with login, topics, and posts
+!   chat-main.as - Chat client (HTTP version)
 
     script Chat
+
+!! Declarations: DOM element handles, then working variables.
+!!
+!! AllSpeak requires every name to be declared before use. The first group declares handles for the DOM elements the script attaches to after rendering; each name mirrors an @id in chat.json. The second group declares scratch variables for state and string-building shared across the event handlers below.
+!!
+!! ReplyDeleteIds is a pipe-delimited string of reply IDs, indexed by the order of the delete-reply buttons rendered into RepliesMarkup. DoDeleteReply walks that string to find the ID for the clicked button — needed because the delete buttons are an array-of-elements (ReplyDeleteBtn) whose entries don't carry the underlying reply ID directly.
 
     div Body
     variable Layout
@@ -62,19 +68,10 @@
     div ReplyMessage
     button ReplyDeleteBtn
 
-    topic MyTopic
-    topic ServerTopic
     variable TitleText
-    variable MyID
-    variable Broker
-    variable MqttUsername
-    variable MqttPassword
-    variable ChatConfig
-    variable SystemID
-    variable Action
-    variable MessageText
-    variable ReceivedMessage
-    variable WaitCount
+    variable ApiBase
+    variable Request
+    variable Response
     variable ChatUsername
     variable ChatPassword
     variable Pos
@@ -110,102 +107,40 @@
     variable PDate
     variable PTime
     variable PDPart
+!!!
 
-!    debug step
+!! Load instance config, build the API base, and restore any saved login from browser storage.
+!!
+!! chat-config.json supplies the per-instance page title. ApiBase is the relative string `api`; the live URL is `/<instance-id>/api/...` but the prefix is invisible from the client because index.html and chat-main.as are served from the same prefix by the server.
+!!
+!! The `null`/`undefined` checks normalise empty storage across browsers — a key that was never set can come back as the literal string `null` rather than empty, which would otherwise look like a non-empty username and trigger a doomed auto-login.
 
-	set the tracer rows to 10
-
-    ! Get Credentials from server
-    variable Credentials
-!    rest get Credentials from `../credentials.php` or go to AbandonShip
-    rest get Credentials from `../credentials.json`
+    rest get Response from `chat-config.json`
     or begin
-        log `../credentials does not exist`
-        rest get Credentials from `../credentials.php` or go to AbandonShip
-        go to GotCredentials
+        alert `Could not load chat-config.json`
+        stop
     end
-GotCredentials:
-!    log Credentials
-    put element `broker` of Credentials into Broker
-    put element `username` of Credentials into MqttUsername
-    put element `password` of Credentials into MqttPassword
-    if Broker is empty go to NoCredentials
+    put element `title` of Response into TitleText
+    put `api` into ApiBase
+    log `API base: ` cat ApiBase
 
-    rest get ChatConfig from `chat-config.json`  or go to AbandonShip
-!    log ChatConfig
-    put element `id` of ChatConfig into SystemID
-    put element `title` of ChatConfig into TitleText
-    put SystemID cat `/chat` into SystemID
-    log `The system ID is ` cat SystemID
-
-    ! Set up MQTT
-    put `Chat-` cat random 999999 into MyID
-
-    init ServerTopic
-        name SystemID
-        qos 1
-
-    init MyTopic
-        name MyID
-        qos 1
-
-    mqtt
-        token MqttUsername MqttPassword
-        id MyID
-        broker Broker
-        port 443
-        subscribe MyTopic
-
-    ! Load saved chat credentials
     get ChatUsername from storage as `chat-user`
     if ChatUsername is `null` put empty into ChatUsername
     if ChatUsername is `undefined` put empty into ChatUsername
     get ChatPassword from storage as `chat-pass`
     if ChatPassword is `null` put empty into ChatPassword
     if ChatPassword is `undefined` put empty into ChatPassword
+!!!
 
-    on mqtt connect
-    begin
-        log `Connected to broker`
-        go to FetchLayout
-    end
+!! Fetch the Webson layout, render it into the body, then connect every declared handle to its @id in the DOM.
+!!
+!! `render` walks the JSON tree and creates real HTML. `attach` binds a declared AllSpeak name to the DOM element with the given @id, so subsequent `set the content of`, `set style`, and `on click` operations target that element.
 
-    on mqtt message
-    begin
-        put the mqtt message into ReceivedMessage
-    end
-
-    on mqtt error
-    begin
-        alert `MQTT connection failed. Check credentials and try again.`
-    end
-
-    stop
-
-! ---- Fetch layout from server ----
-
-FetchLayout:
-    put empty into ReceivedMessage
-    put `get-file` into Action
-    put `chat.json` into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-    gosub WaitForReply
-    if ReceivedMessage is not empty
-    begin
-        put ReceivedMessage into Layout
-        put empty into ReceivedMessage
-        go to GotLayout
-    end
     rest get Layout from `chat.json`
-    or rest get Layout from `chat/chat.json`
     or begin
         alert `Could not load chat.json`
         stop
     end
-GotLayout:
 
     create Body
     render Layout in Body
@@ -265,62 +200,56 @@ GotLayout:
     attach ReplyMessage to `reply-message`
 
     set the content of Title to TitleText
-    set the content of Status to `Connected to broker. Checking server...`
+!!!
+
+!! Verify the server responds, then branch to auto-login or the login form.
+!!
+!! /ping returns {status: ok}. If the rest call fails or returns a non-ok status, show a red "not responding" message and stop — no point exposing login if the backend is unreachable. On success show green "Connected", then jump to AutoLogin (if storage had credentials) or ShowLogin.
+
+    set the content of Status to `Checking server...`
     set style `color` of Status to `#880`
-    go to CheckServer
-
-! ---- Server check ----
-
-CheckServer:
-    put `ping` into Action
-    put empty into MessageText
-    put empty into ReceivedMessage
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
-        set the content of Status to `Connected to broker. Chat server not responding.`
+    rest get Response from ApiBase cat `/ping`
+    or begin
+        set the content of Status to `Chat server not responding.`
         set style `color` of Status to `#800`
         stop
     end
-    put empty into ReceivedMessage
-    set the content of Status to `Connected to broker. Connected to chat server.`
+    put element `status` of Response into ReplyStatus
+    if ReplyStatus is not `ok`
+    begin
+        set the content of Status to `Chat server not responding.`
+        set style `color` of Status to `#800`
+        stop
+    end
+    set the content of Status to `Connected to chat server.`
     set style `color` of Status to `#080`
-    log `Chat user name is ` cat ChatUsername
     if ChatUsername is not empty go to AutoLogin
     go to ShowLogin
+!!!
 
-! ---- Login ----
+!! Try login with saved credentials and enter the chat on success.
+!!
+!! On any failure (server error, bad credentials, no reply) fall through silently to ShowLogin — the user didn't explicitly request a login this session, so no error message, just present the form. On success the credentials are re-stored (the username in particular, in case the server canonicalised it).
 
 AutoLogin:
     set the content of Status to `Logging in as ` cat ChatUsername cat `...`
-    put empty into ReceivedMessage
-    put `login` into Action
-    put ChatUsername cat `|` cat ChatPassword into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty go to ShowLogin
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put `{"username":"` cat ChatUsername cat `","password":"` cat ChatPassword cat `"}` into Request
+    rest post Request to ApiBase cat `/login` giving Response
+    or go to ShowLogin
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
-        put ReplyBody into ChatUsername
+        put element `username` of Response into ChatUsername
         put ChatUsername into storage as `chat-user`
         put ChatPassword into storage as `chat-pass`
         go to EnterChat
     end
     go to ShowLogin
+!!!
+
+!! Show the login form and wire its handlers.
+!!
+!! Pre-fills the inputs from any restored credentials, disables the submit button until both fields are filled, and binds keystrokes to re-check the fields. `stop` parks the script — control resumes via the click/key handlers, not by falling through.
 
 ShowLogin:
     set the text of UsernameInput to ChatUsername
@@ -334,6 +263,11 @@ ShowLogin:
     on click ShowRegisterLink go to ShowRegister
     on key gosub CheckLoginFields
     stop
+!!!
+
+!! Show the register form and wire its handlers.
+!!
+!! Symmetric counterpart to ShowLogin: disable submit until both fields are filled, bind keystrokes to re-validate, then stop and wait.
 
 ShowRegister:
     set the content of RegisterMessage to ``
@@ -345,6 +279,11 @@ ShowRegister:
     on click ShowLoginLink go to ShowLogin
     on key gosub CheckRegisterFields
     stop
+!!!
+
+!! Submit the login form, store credentials on success, clear them on failure.
+!!
+!! Success: stash username and password in browser storage so AutoLogin works next session, then jump to EnterChat. Failure is destructive: ChatUsername, ChatPassword, and both storage entries are wiped, so a wrong password doesn't linger and re-fire AutoLogin on reload. CheckLoginFields re-runs after a failed attempt so the button re-enables once the user edits a field.
 
 DoLogin:
     put the text of UsernameInput into ChatUsername
@@ -352,35 +291,24 @@ DoLogin:
     disable LoginButton
     set the content of LoginMessage to `Logging in...`
     set style `color` of LoginMessage to `#888`
-    put empty into ReceivedMessage
-    put `login` into Action
-    put ChatUsername cat `|` cat ChatPassword into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    put `{"username":"` cat ChatUsername cat `","password":"` cat ChatPassword cat `"}` into Request
+    rest post Request to ApiBase cat `/login` giving Response
+    or begin
         gosub CheckLoginFields
         set the content of LoginMessage to `No reply from server`
         set style `color` of LoginMessage to `#800`
         stop
     end
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
-        put ReplyBody into ChatUsername
+        put element `username` of Response into ChatUsername
         put ChatUsername into storage as `chat-user`
         put ChatPassword into storage as `chat-pass`
         go to EnterChat
     end
     gosub CheckLoginFields
+    put element `message` of Response into ReplyBody
     set the content of LoginMessage to ReplyBody
     set style `color` of LoginMessage to `#800`
     put empty into ChatUsername
@@ -388,6 +316,11 @@ DoLogin:
     put empty into storage as `chat-user`
     put empty into storage as `chat-pass`
     stop
+!!!
+
+!! Submit the register form; on success treat the new user as logged in.
+!!
+!! The server's /register accepts a brand-new username, or treats a resubmission of an existing username + matching password as a successful login (idempotent registration). On failure, clear the in-memory credentials but leave any existing browser storage alone — registration shouldn't displace a saved session that already works.
 
 DoRegister:
     put the text of RegUsernameInput into ChatUsername
@@ -395,42 +328,34 @@ DoRegister:
     disable RegisterButton
     set the content of RegisterMessage to `Registering...`
     set style `color` of RegisterMessage to `#888`
-    put empty into ReceivedMessage
-    put `register` into Action
-    put ChatUsername cat `|` cat ChatPassword into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    put `{"username":"` cat ChatUsername cat `","password":"` cat ChatPassword cat `"}` into Request
+    rest post Request to ApiBase cat `/register` giving Response
+    or begin
         gosub CheckRegisterFields
         set the content of RegisterMessage to `No reply from server`
         set style `color` of RegisterMessage to `#800`
         stop
     end
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
-        put ReplyBody into ChatUsername
+        put element `username` of Response into ChatUsername
         put ChatUsername into storage as `chat-user`
         put ChatPassword into storage as `chat-pass`
         go to EnterChat
     end
     gosub CheckRegisterFields
+    put element `message` of Response into ReplyBody
     set the content of RegisterMessage to ReplyBody
     set style `color` of RegisterMessage to `#800`
     put empty into ChatUsername
     put empty into ChatPassword
     stop
+!!!
 
-! ---- Chat main screen ----
+!! Land on the chat screen after login and wire every navigation handler.
+!!
+!! Every on-click binding for the main chat is established here once. The user never leaves this screen during a session — the navigation gosubs just show and hide panels within it. LoadTopics fires immediately so the topic list is populated before the user sees the screen. `stop` parks the script; from here on, control flows through the handlers.
 
 EnterChat:
     set the content of Status to `Logged in as ` cat ChatUsername
@@ -453,29 +378,26 @@ EnterChat:
     on click SubmitReplyButton gosub SubmitReply
     on click CancelReplyButton gosub HideReply
     stop
+!!!
 
-! ---- Topics ----
+!! Fetch the topic list from the server and hand it to RenderTopics.
+!!
+!! Called at chat entry and after any topic-list change (create, back-to-topics). Shows a transient "Loading..." while the request is in flight; on failure leaves a "No reply from server" message in place.
 
 LoadTopics:
     set the content of TopicListPanel to `Loading topics...`
-    put empty into ReceivedMessage
-    put `topics` into Action
-    put `` into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    rest get TopicsJson from ApiBase cat `/topics`
+    or begin
         set the content of TopicListPanel to `No reply from server`
         return
     end
-    put ReceivedMessage into TopicsJson
-    put empty into ReceivedMessage
     gosub RenderTopics
     return
+!!!
+
+!! Render the fetched topic list into TopicListPanel as a column of clickable buttons.
+!!
+!! Builds the HTML markup string in a loop, then injects it. After insertion, walks the same range again to attach each `TopicItem-N` element into the TopicItem array-of-elements, so a single `on click TopicItem` handler covers them all and discovers which one fired via `the index of TopicItem`. An empty topic list short-circuits to an instructional message.
 
 RenderTopics:
     put the json count of TopicsJson into Count
@@ -499,7 +421,6 @@ RenderTopics:
         add 1 to N
     end
     set the content of TopicListPanel to TopicMarkup
-    ! Attach click handlers to topic buttons
     set the elements of TopicItem to Count
     put 0 into N
     while N is less than Count
@@ -510,6 +431,11 @@ RenderTopics:
     end
     on click TopicItem go to TopicClick
     return
+!!!
+
+!! Handle a click on a topic button and switch to its posts view.
+!!
+!! `the index of TopicItem` reports which button in the array fired. Look that index up in TopicsJson to recover the topic name, then dispatch to ShowPosts. `stop` ends this event thread; ShowPosts will park its own.
 
 TopicClick:
     put the index of TopicItem into N
@@ -517,16 +443,29 @@ TopicClick:
     put element `name` of TEntry into CurrentTopic
     gosub ShowPosts
     stop
+!!!
+
+!! Topic-bar button handler: doubles as "New Topic" and "Topics" depending on context.
+!!
+!! When viewing posts within a topic (CurrentTopic set), the button is labelled "Topics" and goes back to the topic list. When on the topic list, it opens the new-topic form. The label-flipping happens in ShowPosts and BackToTopics; this gosub just dispatches on the current state.
 
 HandleTopicToggle:
     if CurrentTopic is not empty gosub BackToTopics
     else set style `display` of NewTopicPanel to `flex`
     return
+!!!
+
+!! Close the new-topic panel and clear any previous error message.
 
 HideNewTopic:
     set style `display` of NewTopicPanel to `none`
     set the content of NewTopicMessage to ``
     return
+!!!
+
+!! Submit the new-topic form, reload the topic list on success.
+!!
+!! Validates locally that name and description are both non-empty (the server would reject empty too, but a client check spares a round-trip). On success, clear the form inputs, close the panel, and re-fetch the topic list so the new entry appears.
 
 CreateTopic:
     put the text of NewTopicName into TName
@@ -545,26 +484,14 @@ CreateTopic:
     end
     set the content of NewTopicMessage to `Creating topic...`
     set style `color` of NewTopicMessage to `#888`
-    put empty into ReceivedMessage
-    put `new-topic` into Action
-    put ChatUsername cat `|` cat TName cat `|` cat TDesc into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    put `{"name":"` cat TName cat `","description":"` cat TDesc cat `","creator":"` cat ChatUsername cat `"}` into Request
+    rest post Request to ApiBase cat `/topic` giving Response
+    or begin
         set the content of NewTopicMessage to `No reply from server`
         set style `color` of NewTopicMessage to `#800`
         return
     end
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
         gosub HideNewTopic
@@ -574,12 +501,16 @@ CreateTopic:
     end
     else
     begin
+        put element `message` of Response into ReplyBody
         set the content of NewTopicMessage to ReplyBody
         set style `color` of NewTopicMessage to `#800`
     end
     return
+!!!
 
-! ---- Posts ----
+!! Switch to the posts pane for CurrentTopic and fetch its posts.
+!!
+!! Sets the topic-bar title to the current topic, flips the toggle button label to "Topics", hides the topic list and new-topic panel, exposes the posts panel and its "New Post" toggle, then issues the /posts/<topic> request and renders the result.
 
 ShowPosts:
     set the content of TopicBarTitle to `Topic: ` cat CurrentTopic
@@ -589,24 +520,18 @@ ShowPosts:
     set style `display` of NewTopicPanel to `none`
     set style `display` of PostsPanel to `flex`
     set the content of PostListPanel to `Loading posts...`
-    put empty into ReceivedMessage
-    put `posts` into Action
-    put CurrentTopic into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    rest get PostsJson from ApiBase cat `/posts/` cat CurrentTopic
+    or begin
         set the content of PostListPanel to `No reply from server`
         return
     end
-    put ReceivedMessage into PostsJson
-    put empty into ReceivedMessage
     gosub RenderPosts
     return
+!!!
+
+!! Render the fetched posts list into PostListPanel, decoding the base64 subjects for display.
+!!
+!! Same pattern as RenderTopics: build markup in a loop, insert it, then walk the range again to attach each `PostItem-N` element into the PostItem array. Subjects and bodies are stored base64-encoded server-side so newlines and quotes survive the JSON round-trip without escape gymnastics; this loop decodes the subject for display. An empty post list shows a "no posts" placeholder.
 
 RenderPosts:
     put the json count of PostsJson into Count
@@ -631,7 +556,6 @@ RenderPosts:
         add 1 to N
     end
     set the content of PostListPanel to PostMarkup
-    ! Attach click handlers to post buttons
     set the elements of PostItem to Count
     put 0 into N
     while N is less than Count
@@ -642,6 +566,11 @@ RenderPosts:
     end
     on click PostItem go to PostClick
     return
+!!!
+
+!! Handle a click on a post button and open its detail view.
+!!
+!! CurrentDepth is reset to 0 — this is the root post, so any reply made from here will be depth 1.
 
 PostClick:
     put the index of PostItem into N
@@ -650,6 +579,13 @@ PostClick:
     put 0 into CurrentDepth
     gosub ViewPost
     stop
+!!!
+
+!! Show the detail view for CurrentPostId: subject, author, formatted timestamp, body, and replies.
+!!
+!! Resets all per-view UI state (hides edit panel, blanks contents to "Loading...", hides edit/delete links by default) before the fetch, so a slow or failed request doesn't leave stale content visible. Edit and Delete links only re-appear if PAuthor matches the logged-in user.
+!!
+!! Subject and body are base64-decoded after fetch (see RenderPosts for why). The post id doubles as a millisecond timestamp; FormatTimestamp turns it into PDate (YYYY/MM/DD) and PTime (HH:MM:SS). Replies are returned as part of the same /view response and handed to RenderReplies.
 
 ViewPost:
     set style `display` of PostListPanel to `none`
@@ -666,28 +602,16 @@ ViewPost:
     set style `display` of EditPostLink to `none`
     set style `display` of DeletePostLink to `none`
     set the content of PostRepliesPanel to ``
-    put empty into ReceivedMessage
-    put `view` into Action
-    put CurrentTopic cat `|` cat CurrentPostId into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    rest get PostData from ApiBase cat `/view/` cat CurrentTopic cat `/` cat CurrentPostId
+    or begin
         set the content of PostViewSubject to `No reply from server`
         return
     end
-    put ReceivedMessage into PostData
-    put empty into ReceivedMessage
     put element `post` of PostData into PostObj
     put element `subject` of PostObj into PSubject
     put element `author` of PostObj into PAuthor
     put element `body` of PostObj into PBody
     put element `id` of PostObj into PTimestamp
-    ! Decode base64-encoded subject and body
     set encoding to `base64`
     decode PSubject
     decode PBody
@@ -700,10 +624,16 @@ ViewPost:
         set style `display` of EditPostLink to `inline`
         set style `display` of DeletePostLink to `inline`
     end
-    ! Show replies
     put element `replies` of PostData into RepliesJson
     gosub RenderReplies
     return
+!!!
+
+!! Render the post's replies, with per-reply Delete buttons for the right users.
+!!
+!! Each reply is rendered as an indented block: author label plus a body preview. A Delete button appears when the logged-in user is either the reply's author OR the parent post's owner — so post owners can clear other people's replies on their own posts.
+!!
+!! The reply IDs are accumulated into ReplyDeleteIds (pipe-delimited, in render order) so DoDeleteReply can recover the right ID from `the index of ReplyDeleteBtn`. After insertion, the matching `ReplyDel-N` DOM elements are attached into the ReplyDeleteBtn array so a single `on click` covers them all.
 
 RenderReplies:
     put the json count of RepliesJson into Count
@@ -741,7 +671,6 @@ RenderReplies:
         add 1 to N
     end
     set the content of PostRepliesPanel to RepliesMarkup
-    ! Attach click handlers to reply delete buttons
     if ReplyDeleteCount is greater than 0
     begin
         set the elements of ReplyDeleteBtn to ReplyDeleteCount
@@ -755,6 +684,11 @@ RenderReplies:
         on click ReplyDeleteBtn gosub DoDeleteReply
     end
     return
+!!!
+
+!! Return from the posts pane to the topic list and reload it.
+!!
+!! Clears CurrentTopic so HandleTopicToggle's branch logic flips back to "open New Topic", relabels the toggle to "New Topic", hides the post-related panels, and re-fetches the topic list to pick up any changes elsewhere.
 
 BackToTopics:
     put empty into CurrentTopic
@@ -767,15 +701,26 @@ BackToTopics:
     gosub HideNewPost
     gosub LoadTopics
     return
+!!!
+
+!! Show the new-post form.
 
 ToggleNewPost:
     set style `display` of NewPostPanel to `flex`
     return
+!!!
+
+!! Hide the new-post form and clear any error message.
 
 HideNewPost:
     set style `display` of NewPostPanel to `none`
     set the content of NewPostMessage to ``
     return
+!!!
+
+!! Submit the new-post form; reload the post list on success.
+!!
+!! Validates locally that subject and body are non-empty. The client sends the subject and body as plain text — the server is responsible for base64-encoding them for storage. On success clear the form, hide the panel, and call ShowPosts to re-fetch.
 
 SubmitPost:
     put the text of NewPostSubject into PSubject
@@ -793,26 +738,18 @@ SubmitPost:
     end
     set the content of NewPostMessage to `Posting...`
     set style `color` of NewPostMessage to `#888`
-    put empty into ReceivedMessage
-    put `post` into Action
-    put CurrentTopic cat `|` cat PSubject cat `|` cat ChatUsername cat `|` cat the text of NewPostBody into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    put `{"topic":"` cat CurrentTopic
+        cat `","subject":"` cat PSubject
+        cat `","author":"` cat ChatUsername
+        cat `","body":"` cat the text of NewPostBody
+        cat `"}` into Request
+    rest post Request to ApiBase cat `/post` giving Response
+    or begin
         set the content of NewPostMessage to `No reply from server`
         set style `color` of NewPostMessage to `#800`
         return
     end
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
         gosub HideNewPost
@@ -822,20 +759,25 @@ SubmitPost:
     end
     else
     begin
+        put element `message` of Response into ReplyBody
         set the content of NewPostMessage to ReplyBody
         set style `color` of NewPostMessage to `#800`
     end
     return
+!!!
 
-! ---- Post view navigation ----
+!! Return from the post-detail view to the post list, also hiding any open reply form.
 
 BackToPosts:
     set style `display` of PostViewPanel to `none`
     set style `display` of PostListPanel to `block`
     gosub HideReply
     return
+!!!
 
-! ---- Edit post ----
+!! Switch the post view into edit mode, pre-filling the form with the current subject and body.
+!!
+!! Hides the static subject/body/replies and shows the editable form. PSubject and PBody were left populated by the most recent ViewPost call, so the form starts with the current values without an extra fetch.
 
 EditPost:
     set the text of EditPostSubject to PSubject
@@ -846,6 +788,11 @@ EditPost:
     set style `display` of PostRepliesPanel to `none`
     set style `display` of EditPostPanel to `flex`
     return
+!!!
+
+!! Cancel edit mode and restore the static post view.
+!!
+!! Does not call ViewPost — the in-memory PSubject/PBody were not modified, so the static panes still show the right values and a re-fetch would be wasted.
 
 CancelEdit:
     set style `display` of EditPostPanel to `none`
@@ -853,37 +800,43 @@ CancelEdit:
     set style `display` of PostViewBody to `block`
     set style `display` of PostRepliesPanel to `block`
     return
+!!!
+
+!! Confirm and delete the current post.
+!!
+!! `confirm` is a synchronous browser prompt; the user must accept before the request fires. On success, hide the now-defunct post-view and re-fetch the posts list via ShowPosts. The server re-checks the author matches the logged-in user; if it rejects (e.g. auth changed) the alert path surfaces the message.
 
 DeletePost:
     if confirm `Are you sure you want to delete this post?`
     begin
-        put empty into ReceivedMessage
-        put `delete-post` into Action
-        put CurrentTopic cat `|` cat CurrentPostId cat `|` cat ChatUsername into MessageText
-        send to ServerTopic
-            sender MyTopic
-            action Action
-            message MessageText
-        gosub WaitForReply
-        if ReceivedMessage is empty
-        begin
+        put `{"topic":"` cat CurrentTopic
+            cat `","id":"` cat CurrentPostId
+            cat `","author":"` cat ChatUsername
+            cat `"}` into Request
+        rest post Request to ApiBase cat `/delete-post` giving Response
+        or begin
             alert `No reply from server`
             return
         end
-        put position of `|` in ReceivedMessage into Pos
-        put left Pos of ReceivedMessage into ReplyStatus
-        add 1 to Pos
-        put from Pos of ReceivedMessage into ReplyBody
-        put empty into ReceivedMessage
+        put element `status` of Response into ReplyStatus
         if ReplyStatus is `ok`
         begin
             set style `display` of PostViewPanel to `none`
             set style `display` of PostListPanel to `block`
             gosub ShowPosts
         end
-        else alert ReplyBody
+        else
+        begin
+            put element `message` of Response into ReplyBody
+            alert ReplyBody
+        end
     end
     return
+!!!
+
+!! Submit an edit to the current post.
+!!
+!! Validates non-empty subject and body locally before sending. On success, hide the edit panel and re-run ViewPost to refresh from the server (this also re-decodes the base64-stored values and re-renders the replies). On rejection, leave the form open with the server's message in place.
 
 SaveEdit:
     put the text of EditPostSubject into PSubject
@@ -902,25 +855,19 @@ SaveEdit:
     end
     set the content of EditPostMessage to `Saving...`
     set style `color` of EditPostMessage to `#888`
-    put empty into ReceivedMessage
-    put `edit-post` into Action
-    put CurrentTopic cat `|` cat CurrentPostId cat `|` cat ChatUsername cat `|` cat PSubject cat `|` cat PBody into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    put `{"topic":"` cat CurrentTopic
+        cat `","id":"` cat CurrentPostId
+        cat `","author":"` cat ChatUsername
+        cat `","subject":"` cat PSubject
+        cat `","body":"` cat PBody
+        cat `"}` into Request
+    rest post Request to ApiBase cat `/edit-post` giving Response
+    or begin
         set the content of EditPostMessage to `No reply from server`
         set style `color` of EditPostMessage to `#800`
         return
     end
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
         set style `display` of EditPostPanel to `none`
@@ -928,19 +875,31 @@ SaveEdit:
     end
     else
     begin
+        put element `message` of Response into ReplyBody
         set the content of EditPostMessage to ReplyBody
         set style `color` of EditPostMessage to `#800`
     end
     return
+!!!
+
+!! Show the reply form for the current post.
 
 ToggleReply:
     set style `display` of ReplyPanel to `flex`
     return
+!!!
+
+!! Hide the reply form and clear any error message.
 
 HideReply:
     set style `display` of ReplyPanel to `none`
     set the content of ReplyMessage to ``
     return
+!!!
+
+!! Submit a reply to the current post; re-fetch the post on success.
+!!
+!! CurrentDepth was set by PostClick (0 for root) or by a previous reply view; it's passed through so the server can enforce the 3-deep limit and stamp the new reply's depth. The body is sent as plain text — the server base64-encodes it for storage. Success path clears and hides the reply form, then re-runs ViewPost so the new reply appears in the list.
 
 SubmitReply:
     if the text of ReplyBodyInput is empty
@@ -951,26 +910,19 @@ SubmitReply:
     end
     set the content of ReplyMessage to `Posting reply...`
     set style `color` of ReplyMessage to `#888`
-    put empty into ReceivedMessage
-    put `reply` into Action
-    put CurrentTopic cat `|` cat CurrentPostId cat `|` cat CurrentDepth cat `|` cat ChatUsername cat `|` cat the text of ReplyBodyInput into MessageText
-    send to ServerTopic
-        sender MyTopic
-        action Action
-        message MessageText
-         ! confirm
-    gosub WaitForReply
-    if ReceivedMessage is empty
-    begin
+    put `{"topic":"` cat CurrentTopic
+        cat `","postId":"` cat CurrentPostId
+        cat `","depth":` cat CurrentDepth
+        cat `,"author":"` cat ChatUsername
+        cat `","body":"` cat the text of ReplyBodyInput
+        cat `"}` into Request
+    rest post Request to ApiBase cat `/reply` giving Response
+    or begin
         set the content of ReplyMessage to `No reply from server`
         set style `color` of ReplyMessage to `#800`
         return
     end
-    put position of `|` in ReceivedMessage into Pos
-    put left Pos of ReceivedMessage into ReplyStatus
-    add 1 to Pos
-    put from Pos of ReceivedMessage into ReplyBody
-    put empty into ReceivedMessage
+    put element `status` of Response into ReplyStatus
     if ReplyStatus is `ok`
     begin
         gosub HideReply
@@ -979,15 +931,20 @@ SubmitReply:
     end
     else
     begin
+        put element `message` of Response into ReplyBody
         set the content of ReplyMessage to ReplyBody
         set style `color` of ReplyMessage to `#800`
     end
     return
+!!!
+
+!! Confirm and delete the reply at the position of the clicked Delete button.
+!!
+!! `the index of ReplyDeleteBtn` gives the position within the delete-button array, but the rendered DOM doesn't carry the reply ID alongside that index. ReplyDeleteIds is a pipe-delimited string of reply IDs assembled in render order in RenderReplies; the loop steps past N pipe-separated entries to land on the right ID, then the trailing-tail trim removes any reply IDs that come after. Server-side, the delete is authorised if the caller is the reply's author OR the parent post's owner.
 
 DoDeleteReply:
     if confirm `Are you sure you want to delete this reply?`
     begin
-        ! Get the reply ID from the index of the clicked button
         put the index of ReplyDeleteBtn into N
         put ReplyDeleteIds into RId
         while N is greater than 0
@@ -999,30 +956,30 @@ DoDeleteReply:
         end
         put position of `|` in RId into Pos
         if Pos is not -1 put left Pos of RId into RId
-        put empty into ReceivedMessage
-        put `delete-reply` into Action
-        put CurrentTopic cat `|` cat CurrentPostId cat `|` cat RId cat `|` cat ChatUsername into MessageText
-        send to ServerTopic
-            sender MyTopic
-            action Action
-            message MessageText
-        gosub WaitForReply
-        if ReceivedMessage is empty
-        begin
+        put `{"topic":"` cat CurrentTopic
+            cat `","postId":"` cat CurrentPostId
+            cat `","replyId":"` cat RId
+            cat `","author":"` cat ChatUsername
+            cat `"}` into Request
+        rest post Request to ApiBase cat `/delete-reply` giving Response
+        or begin
             alert `No reply from server`
             return
         end
-        put position of `|` in ReceivedMessage into Pos
-        put left Pos of ReceivedMessage into ReplyStatus
-        add 1 to Pos
-        put from Pos of ReceivedMessage into ReplyBody
-        put empty into ReceivedMessage
+        put element `status` of Response into ReplyStatus
         if ReplyStatus is `ok` gosub ViewPost
-        else alert ReplyBody
+        else
+        begin
+            put element `message` of Response into ReplyBody
+            alert ReplyBody
+        end
     end
     return
+!!!
 
-! ---- Format timestamp as YYYY/MM/DD HH:MM:SS ----
+!! Format PTimestamp (milliseconds since epoch) into PDate as YYYY/MM/DD and PTime as HH:MM:SS.
+!!
+!! Divides by 1000 first because AllSpeak's date-part operators (`year of`, `month number of`, etc.) expect seconds. `month number` is zero-based, so add 1. Zero-padding two-digit fields is done by appending a literal `0` to the running string before appending the number — there is no inline formatter in AllSpeak. PTime is initialised differently (hour can start fresh) than PDate (which is already partially built when minute and second are appended).
 
 FormatTimestamp:
     divide PTimestamp by 1000
@@ -1046,20 +1003,11 @@ FormatTimestamp:
     if PDPart is less than 10 put PTime cat `0` into PTime
     put PTime cat PDPart into PTime
     return
+!!!
 
-! ---- Shared ----
-
-WaitForReply:
-    put 0 into WaitCount
-WaitLoop:
-    if ReceivedMessage is not empty return
-    add 1 to WaitCount
-    if WaitCount is greater than 100
-    begin
-        return
-    end
-    wait 10 ticks
-    go to WaitLoop
+!! Enable the login button only when both username and password fields are non-empty.
+!!
+!! Bound to `on key` in ShowLogin so it fires after every keystroke; also called explicitly after showing the form and after a failed attempt to recompute the initial state.
 
 CheckLoginFields:
     if UsernameInput is not empty
@@ -1072,6 +1020,11 @@ CheckLoginFields:
     end
     disable LoginButton
     return
+!!!
+
+!! Enable the register button only when both username and password fields are non-empty.
+!!
+!! Symmetric counterpart to CheckLoginFields for the register form.
 
 CheckRegisterFields:
     if RegUsernameInput is not empty
@@ -1084,14 +1037,4 @@ CheckRegisterFields:
     end
     disable RegisterButton
     return
-
-NoCredentials:
-    set the content of Status to `No credentials provided`
-    stop
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! 	Warn the user and abandon this run
-AbandonShip:
-	alert `A fatal error has occurred.`
-    	cat newline cat `Please refresh this browser page to restart.`
-    exit
+!!!

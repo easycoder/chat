@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chat server using Bottle — HTTP replacement for MQTT-based chat-server.ecs"""
+"""Chat server using Bottle — HTTP replacement for MQTT-based chat-server.as"""
 
 import json
 import os

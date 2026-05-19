@@ -1,9 +1,11 @@
-!   code.ecs
-!   EasyCoder development server.
-!   Usage: easycoder code.ecs [port]    (default: 8080)
+!   server.as
+!   AllSpeak development server.
+!   Usage: allspeak server.as [-t|--tabs page1,page2,...] [port]    (default port: 8080)
+!   Example: allspeak server.as -t edit,test 8080
+!     opens edit.html and test.html in the default browser at localhost:8080
 !
 !   Serves two purposes:
-!     1. Hosts the EasyCoder editor at localhost:<port>/edit.html
+!     1. Hosts the AllSpeak editor at localhost:<port>/edit.html
 !     2. Serves project files at localhost:<port>/<project>.html
 !        (replaces the need for python3 -m http.server)
 !
@@ -32,14 +34,33 @@
     variable LocalVersion
     server Files
 
-    put `https://raw.githubusercontent.com/easycoder/easycoder.github.io/master/code/` into RepoBase
+    put `https://allspeak.ai/code/` into RepoBase
 
     put cwd into BaseDir
     variable ArgCount
+    variable ArgIndex
+    variable CurrentArg
+    variable TabList
+    variable TabName
+    variable TabIndex
+    variable TabUrl
     put argc into ArgCount
     put `8080` into Port
-    if ArgCount is greater than 0
-        put arg 0 into Port
+    put empty into TabList
+    put 0 into ArgIndex
+    while ArgIndex is less than ArgCount
+    begin
+        put arg ArgIndex into CurrentArg
+        if CurrentArg is `-t` or CurrentArg is `--tabs`
+        begin
+            increment ArgIndex
+            if ArgIndex is less than ArgCount
+                put arg ArgIndex into TabList
+        end
+        else
+            put CurrentArg into Port
+        increment ArgIndex
+    end
 
     ! Ensure .code-version exists
     if file BaseDir cat `/.code-version` does not exist
@@ -49,7 +70,7 @@
 
     start Files on port Port
 
-    print `EasyCoder dev server running on port ` cat Port
+    print `AllSpeak dev server running on port ` cat Port
     print `Serving files from ` cat BaseDir
     print `Press Ctrl+C to stop`
 
@@ -69,8 +90,9 @@
         if RemoteVersion is not LocalVersion
         begin
             print `Updating from version ` cat LocalVersion cat ` to ` cat RemoteVersion
-            download RepoBase cat `edit.html` to BaseDir cat `/edit.html`
-            download RepoBase cat `code.ecs` to BaseDir cat `/code.ecs`
+            download RepoBase cat `server.as` to BaseDir cat `/server.as`
+            download RepoBase cat `asedit.json` to BaseDir cat `/asedit.json`
+            download RepoBase cat `asedit.as` to BaseDir cat `/asedit.as`
             save RemoteVersion to BaseDir cat `/.code-version`
             print `Update complete`
         end
@@ -100,7 +122,7 @@
         else if FullPath is `/restart`
         begin
             print `Restart requested`
-            system background `sleep 2 && easycoder code.ecs ` cat Port
+            system background `sleep 2 && allspeak server.as ` cat Port
             return `OK` to Files
             exit
         end
@@ -114,9 +136,9 @@
                 return `Forbidden` to Files with status 403
             end
             if FilePath is empty
-                set FileList to entries in BaseDir type `ecs,md,txt,json,html,css,js`
+                set FileList to entries in BaseDir type `as,ecs,md,txt,json,html,css,js`
             else
-                set FileList to entries in BaseDir cat `/` cat FilePath type `ecs,md,txt,json,html,css,js`
+                set FileList to entries in BaseDir cat `/` cat FilePath type `as,ecs,md,txt,json,html,css,js`
             return FileList to Files
         end
         else if FullPath starts with `/read/`
@@ -128,6 +150,11 @@
                 return `Forbidden` to Files with status 403
             end
             load Content from BaseDir cat `/` cat FilePath
+            	on failure
+            	begin
+                	log `Could not open ` cat BaseDir cat  `/` cat FilePath
+                    put empty into Content
+                end
             return Content to Files
         end
         else if FullPath starts with `/write/`
@@ -152,7 +179,7 @@
             end
             if FilePath ends with `.html` put `text/html` into MimeType
             else if FilePath ends with `.json` put `application/json` into MimeType
-            else if FilePath ends with `.ecs` put `text/plain` into MimeType
+            else if FilePath ends with `.as` put `text/plain` into MimeType
             else if FilePath ends with `.js` put `application/javascript` into MimeType
             else if FilePath ends with `.css` put `text/css` into MimeType
             else put `text/plain` into MimeType
@@ -160,5 +187,26 @@
                 return `Not found` to Files with status 404
             end
             return Content to Files with type MimeType
+        end
+    end
+
+    ! Open requested browser tabs (-t/--tabs flag) — done AFTER the
+    ! request handler is registered so the tabs don't race the server
+    ! and hit a 503 'Server handler not ready'.
+    if TabList is not empty
+    begin
+        split TabList on `,`
+        put 0 into TabIndex
+        while TabIndex is less than the elements of TabList
+        begin
+            index TabList to TabIndex
+            put TabList into TabName
+            if TabName is not empty
+            begin
+                put `http://localhost:` cat Port cat `/` cat TabName cat `.html` into TabUrl
+                print `Opening ` cat TabUrl
+                browse TabUrl
+            end
+            increment TabIndex
         end
     end

@@ -1,11 +1,11 @@
 ---
-name: String splitting in EasyCoder
+name: String splitting in AllSpeak
 description: How to split strings by delimiter using position/left/from
 ---
 
 # String splitting by delimiter
 
-EasyCoder has no `split` or `before`/`after` syntax. To split a string on a delimiter (e.g. `|`):
+AllSpeak has no `split` or `before`/`after` syntax. To split a string on a delimiter (e.g. `|`):
 
 ```text
 variable Pos
