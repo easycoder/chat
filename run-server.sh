@@ -1,26 +1,18 @@
 #!/bin/bash
-# Launch chat server, killing any existing instance first.
-# Reads the project ID from chat-config.json to build a unique script name.
-# Always downloads the latest server script from the repo.
+# Launch the HTTP chat server
 
-ID=$(python3 -c "import json; print(json.load(open('chat-config.json'))['id'])")
-SCRIPT="${ID}-chat-server"
+cd "$(dirname "$0")"
 
 # Kill any existing instance
-PATTERN="[${SCRIPT:0:1}]${SCRIPT:1}"
-p=$(ps -eaf | grep "$PATTERN")
+PATTERN="[c]hat-server.py"
+p=$(ps -eaf | grep "$PATTERN" | grep -v grep)
 if [ -n "$p" ]; then
     pid=$(echo "$p" | awk '{print $2}')
-    echo "Killing existing $SCRIPT (PID $pid)"
+    echo "Killing existing chat-server.py (PID $pid)"
     kill $pid
     sleep 1
 fi
 
-# Download latest from repo
-echo "Downloading latest $SCRIPT.ecs from repo..."
-curl -sO https://raw.githubusercontent.com/easycoder/chat/main/chat-server.ecs
-mv chat-server.ecs "$SCRIPT.ecs"
-
-echo "Starting $SCRIPT..."
-easycoder "$SCRIPT.ecs" &
-echo "$SCRIPT started (PID $!)"
+echo "Starting chat server..."
+python3 chat-server.py &
+echo "Chat server started (PID $!)"

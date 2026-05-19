@@ -1,20 +1,118 @@
-# EasyCoder Project — Claude Bootstrap
+# AllSpeak Project — Claude Bootstrap
+
+## Language
+
+This is an **English** AllSpeak project. Communicate with the user in English. Generate AllSpeak scripts using English keywords.
+
+## What is AllSpeak
+
+AllSpeak is a scripting language designed to read like natural human language. Scripts use the `.as` file extension. AllSpeak runs in the browser (JavaScript version) or from the terminal (Python version) — or both together.
+
+AllSpeak uses an **AI-writes, human-reviews** workflow. The AI generates `.as` code; the human checks that it reads sensibly and questions anything unclear. Use the full language — don't avoid a command because it might be unfamiliar. The human only needs to read it, not write it from memory.
+
+## Reference — read this when writing AllSpeak
+
+The complete AllSpeak language reference and idioms live at:
+
+  **https://allspeak.ai/learn/**
+
+The site has 16 reference files (`reference/`) and 12 idiom files (`idioms/`). When you need to look up syntax, runtime behaviour, or idiomatic patterns, consult it rather than relying on training data — AllSpeak's vocabulary doesn't always match what AI was trained on, and the curriculum corrects for that.
+
+**Read `learn/contents.md` first** — it is the canonical index of file paths. Use those exact paths when fetching specific files; do not guess slugs. (For example: the file is `learn/idioms/02-event-handlers-and-array-index.md`, not `02-event-handlers.md`.)
+
+Recommended first reads:
+
+- `learn/idioms/12-working-with-ai.md` — the AI-writes / human-reviews workflow and the common mistakes AI makes on AllSpeak.
+- `learn/reference/16-doc-blocks.md` — the documentation convention used in every section of code (see "Required practices" below).
+- `learn/reference/02-symbols-and-layout.md` — the four punctuation symbols and the lexical surface.
+- `learn/reference/03-variables-and-arrays.md` — the cursor model that variables follow.
+- `learn/reference/09-control-flow.md` — `if`, `while`, `gosub`, `stop`.
+- `learn/idioms/01-cat-and-string-building.md` — `cat`, the single most common AI mistake.
+
+## Required practices
+
+Two practices apply to every piece of AllSpeak code written in this project, including the initial setup:
+
+### 1. Doc blocks on every section
+
+Every contiguous section of code is wrapped in a `!! … !!!` doc block, with prose explaining *why* the section exists.
+
+**Open with one tight sentence on its own line**, then a bare `!!` paragraph break, then any further detail. This keeps Blocks-mode legible at a glance — the reader sees a summary, with the elaboration available below if they want more. Don't pile every detail into the first line; the code already shows the details.
+
+Example:
+
+```
+!! Build the board: nine cells arranged as a 3x3 grid.
+!!
+!! Each cell is a div sized by the CSS-grid layout. A single click handler is shared by all cells; it reads `the index of Cell` to discover which one fired.
+
+    div Cell
+    set the elements of Cell to 9
+    put 0 into N
+    while N is less than 9 begin
+        index Cell to N
+        create Cell in Board
+        add 1 to N
+    end
+
+    on click Cell gosub HandleClick
+!!!
+```
+
+Add doc blocks **as you write** — not after. The prose forces you to state intent in plain language, which surfaces mistakes (a doc block saying "creates 9 cells" while the code creates 1 makes the mismatch obvious before you ever run it). See `learn/reference/16-doc-blocks.md` for the full convention.
+
+After any code edit, run:
+
+```
+python3 asdoc-check.py --write <file>
+```
+
+This refreshes the `@hash` lines in each block so that future edits can detect drift between prose and code.
+
+### 2. Consult `learn/` before writing, not after
+
+Before producing code that uses a feature you haven't already used in this project, fetch the relevant `learn/` file. Don't guess from training data — fetch the reference, read it, then write. This is especially true for: `cat` placement, failure clauses (`or` vs `on failure`), arrays of DOM elements (`create` must be inside a loop with the cursor set, not outside), and `set the content of` with markdown.
+
+## Common mistakes to avoid
+
+Even with the reference in front of you, AI tools reliably get these wrong on AllSpeak. Keep them in mind:
+
+- **`cat` is infix.** It goes BETWEEN two values, never before the first.
+  - ✓ `put \`Hello, \` cat Name cat \`!\` into Greeting`
+  - ✗ `put cat \`Hello, \` cat Name into Greeting` (leading `cat` — parse error)
+  - ✗ `put \`Hello, \` Name \`!\` into Greeting` (missing `cat` — no implicit concatenation)
+
+- **No `for` or `for each` loops.** Use `while` with a counter, or a label-driven loop. See `learn/idioms/03-looping-patterns.md`.
+
+- **Arithmetic uses keywords, not operators.** `add 1 to Counter`, not `Counter += 1` or `Counter = Counter + 1`.
+
+- **No parentheses for grouping.** `(A + B) * C` doesn't exist. Compute into a temporary variable.
+
+- **No `else if` shortcut.** `if … else if … else …` works (it's `else` followed by another `if`), but `elif` doesn't exist. No `case` / `switch` either.
+
+- **Two failure clauses with different behaviour.** `or` runs the clause then stops the thread. `on failure` runs the clause then continues. See `learn/reference/10-errors-and-recovery.md`.
+
+- **`gosub Label`, not `Label()`.** AllSpeak has no callable function syntax.
+
+- **None of these exist:** `try`/`catch`, `break`, `continue`, `return X` (value), `await`, `import` (other languages' meaning).
+
+- **Every variable must be declared before use.** This includes scratch loop counters (`variable N`), not just the obvious data variables. Forgetting to declare a loop counter is a common first-pass mistake. Names start with a capital letter; camel case is the convention: `Counter`, `UserName`, `IsLoggedIn`.
+
+- **Strings are delimited by backticks.** No single or double quotes.
+
+- **Floats are strings.** `3.14` is a four-character string, not a number. Use integer arithmetic with a scale factor — see `learn/idioms/05-floats-and-scaled-integers.md`.
+
+When in doubt, consult `learn/` rather than guessing.
 
 ## First-time setup
 
 > **Beginner tip:** If nothing happens when you start Claude, type **go**.
 
-**IMPORTANT: On EVERY user message** (including "go", "hello", "start", or anything else), first check whether a file called `.easycoder-init` exists in this directory. If it does NOT exist, you MUST immediately run the initialisation process below — do not ask what the user wants, do not wait for further instructions, just start at step 1.
+**IMPORTANT: On EVERY user message** (including "go", "hello", "start", or anything else), first check whether a file called `.allspeak-init` exists in this directory. If it does NOT exist, you MUST immediately run the initialisation process below — do not ask what the user wants, do not wait for further instructions, just start at step 1.
 
 ### Initialisation process
 
-1. **Check EasyCoder is installed.** The user should already have run `pip install -U easycoder` before reaching this point. Verify by running `easycoder --version`. If it is not installed, tell the user to run:
-
-   ```
-   pip install -U easycoder
-   ```
-
-   If the `easycoder` command is not found after installing, the user may need to add their Python scripts directory to their PATH (pip will usually show a warning about this).
+1. **Greet the user** and briefly explain what AllSpeak is — a scripting language that reads like plain English, designed so AI writes the code and the user reviews it.
 
 2. **Ask the user for the project name.** This will be used as the script name and in filenames.
 
@@ -22,51 +120,55 @@
 
 4. **Create the project files** based on the answer:
 
-   - **Command-line**: Create `<project>.ecs` from the CLI template below.
-   - **GUI**: Create `<project>.html`, `<project>-main.ecs`, and `<project>.json` from the GUI templates below.
-   - **Both**: Create all four files.
+   - **Command-line**: Create `<project>.as` from the CLI template below.
+   - **GUI**: Create `<project>.html`, `<project>-main.as`, and `<project>.json` from the GUI templates below.
+   - **Both**: Create all files.
 
-5. **Create `.easycoder-init`** containing the project name and type (cli/gui/both) so this setup is not repeated.
+5. **Create `.allspeak-init`** containing the project name and type (cli/gui/both) so this setup is not repeated.
 
 6. **Explain to the user how to run their project:**
 
-   - **CLI**: Run with `easycoder <project>.ecs`.
-   - **GUI**: Start the dev server with `easycoder code.ecs 8080` (or any free port), then open `http://localhost:8080/<project>.html` in a browser. The EasyCoder runtime is loaded from `https://easycoder.github.io/dist/easycoder.js`.
+   - **CLI**: Run with `allspeak <project>.as`.
+   - **GUI**: Run with `allspeak server.as -t <project> [port]` (default port `8080`). `server.as` starts a local HTTP server, then opens the user's default browser to `http://localhost:<port>/<project>.html` automatically. The browser tab is the app's UI; closing the server (Ctrl+C) closes the app. This single command is what gets baked into Start-menu shortcuts. The AllSpeak runtime is still loaded from the CDN; `server.as` only serves project files.
 
 7. **Walk the user through how the files work together.** For GUI projects, explain:
 
-   - The HTML file is just a launcher — it loads the EasyCoder runtime and runs a tiny bootstrap script that fetches the main `.ecs` file.
-   - The `.ecs` file is the program logic. It creates a body element, fetches the `.json` layout, and uses `render` to turn the JSON into real page elements. It then `attach`es to those elements by their `@id` to interact with them.
-   - The `.json` file defines the page layout using Webson — a JSON format where keys like `#element` create HTML elements, `@id` sets attributes, `#content` sets text, `$Name` defines named components, `#` lists children, and any other key (like `padding` or `color`) is a CSS style.
-   - This separation means the layout can be changed without touching the code, and vice versa. It also makes the JSON easy for AI to generate and modify.
+   - The HTML file is just a launcher — it loads the AllSpeak runtime and runs a tiny bootstrap script that fetches the main `.as` file.
+   - The `.as` file is the program logic. It creates a body element, fetches the `.json` layout, and uses `render` to turn the JSON into real page elements. It then `attach`es to those elements by their `@id` to interact with them.
+   - The `.json` file defines the page layout using Webson — a JSON format where keys like `#element` create HTML elements, `@id` (and any `@<name>`) set attributes, `#content` sets text, `$Name` defines named components, `#` lists children, and any other key is a CSS style. Full details in `learn/reference/14-browser-and-webson.md`.
+   - This separation means the layout can be changed without touching the code, and vice versa.
 
-   For CLI projects, explain that the `.ecs` file is a standalone script run from the terminal, and walk through what each line does.
+   For CLI projects, explain that the `.as` file is a standalone script run from the terminal, and walk through what each line does.
 
-8. **Explain the included editor.** The project directory includes `edit.html` and `code.ecs`, which provide a browser-based editor with syntax highlighting:
+8. **Explain the included editor.** The project directory includes `edit.html`, `asedit.as`, and `asedit.json`, which provide a browser-based code editor with syntax highlighting. To work on the project with the editor open alongside it (a developer convenience), run:
 
-   - The dev server (`easycoder code.ecs 8080`) is already running from step 6.
-   - Open `http://localhost:8080/edit.html` in a browser.
-   - The editor lets you open, edit, and save `.ecs`, `.json`, `.html` and other project files with colour-coded syntax highlighting. It fetches its UI from the EasyCoder repo automatically so only the two local files are needed.
-   - The same server also serves the project files, so you can test GUI projects at `http://localhost:8080/<project>.html` on the same port.
+   `allspeak server.as -t edit,<project> [port]`
+
+   This opens two browser tabs — `edit.html` and `<project>.html` — both served by the same `server.as` instance. The editor lets you open, edit, and save `.as`, `.json`, `.html` and other project files. End users only ever need `allspeak server.as -t <project> [port]`; the `edit,` prefix is a developer convenience.
+
+9. **Ask what they'd like to build.** From here, just respond to what the user wants.
 
 ---
 
-**If `.easycoder-init` DOES exist**, skip initialisation and proceed normally. Read `.easycoder-init` to learn the project name and type.
+**If `.allspeak-init` DOES exist**, skip initialisation and proceed normally. Read `.allspeak-init` to learn the project name and type.
 
 ---
 
 ## CLI template
 
 ```
-!   <project>.ecs
+!   <project>.as
 
     script <Project>
+
+!! Entry point: log a greeting and exit. Replace this with the project's actual logic, keeping each contiguous code section wrapped in its own doc block.
 
     variable Message
     put `Hello from <Project>` into Message
     log Message
 
     exit
+!!!
 ```
 
 ## GUI template
@@ -74,10 +176,8 @@
 A GUI project uses three files:
 
 - **`<project>.html`** — minimal HTML launcher
-- **`<project>-main.ecs`** — EasyCoder script (code)
+- **`<project>-main.as`** — AllSpeak script (code)
 - **`<project>.json`** — Webson layout (UI definition as JSON)
-
-This separation keeps code and layout independent, and the JSON format is easy for AI to generate and modify.
 
 ### `<project>.html`
 
@@ -87,24 +187,34 @@ This separation keeps code and layout independent, and the JSON format is easy f
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><Project></title>
-    <script type='text/javascript' src='https://easycoder.github.io/dist/easycoder.js'></script>
 </head>
 <body>
-    <pre id="easycoder-script" style="display:none">
+    <pre id="allspeak-script" style="display:none">
     variable Script
-    rest get Script from `<project>-main.ecs`
+    rest get Script from `<project>-main.as`
     run Script
     </pre>
+    <script>
+    (function() {
+        var t = Date.now();
+        var s = document.createElement('script');
+        s.src = 'https://allspeak.ai/dist/allspeak.js?v=' + t;
+        s.onload = function() { AllSpeak_Startup(); };
+        document.head.appendChild(s);
+    })();
+    </script>
 </body>
 </html>
 ```
 
-### `<project>-main.ecs`
+### `<project>-main.as`
 
 ```
-!   <project>-main.ecs
+!   <project>-main.as
 
     script <Project>
+
+!! Boot the GUI: render the Webson layout into the body and attach to the elements the rest of the script will manipulate. Each subsequent section of code should get its own doc block.
 
     div Body
     variable Layout
@@ -118,6 +228,7 @@ This separation keeps code and layout independent, and the JSON format is easy f
     set the content of Display to `Hello from <Project>`
 
     stop
+!!!
 ```
 
 ### `<project>.json`
@@ -141,146 +252,10 @@ This separation keeps code and layout independent, and the JSON format is easy f
 }
 ```
 
-**Webson keys:**
-- `#element` — HTML element type (`div`, `button`, `img`, etc.)
-- `@id`, `@src`, etc. — HTML attributes
-- `#content` — inner text/HTML
-- `#` — array of child element references
-- `$Name` — named component definition
-- All other keys are CSS styles
-
 In all templates, replace `<project>` with the project name (lowercase for filenames) and `<Project>` with the capitalised project name.
 
 ---
 
-## EasyCoder language rules
-
-Use `/ecs-js` for JS/browser dialect context and `/ecs-python` for Python/CLI dialect context before writing or modifying `.ecs` code or runtime source. Use `/ecs-review` to check `.ecs` files for syntax correctness.
-
-### Strict syntax guardrails
-
-- Declare variables one per line — no comma declarations.
-- Declare variables before use.
-- Loops: `while ... begin ... end` — never `end while`.
-- Conditionals: `if ... begin ... end` — never `end if`.
-- `begin ... end` blocks must belong to a control statement.
-- No `function`, `end function`, `define`, `end define`, `otherwise`, `endif`.
-- No callable form `Name(...)` — use `gosub Label` and `return`.
-- Assignment: `put ... into Name`.
-- If unsure about a command, **ask before writing code**.
-- **No implicit precedence in `cat` chains.** EasyCoder has no brackets, so `put left N of A cat B cat C into X` applies `left` to the entire concatenation, not just `A`. Always break complex expressions into separate steps:
-  ```text
-  ! WRONG — left applies to the whole cat result
-  put left Pos of Index cat NewVal cat from Pos2 of Index into Index
-
-  ! RIGHT — isolate the left/from operations first
-  put left Pos of Index into Temp
-  put Temp cat NewVal cat from Pos2 of Index into Index
-  ```
-
-### Error handling
-
-The `or` keyword can follow many commands to catch runtime errors:
-
-```text
-! Inline block
-divide Count by Total or begin
-    put `Division failed` into Status
-end
-
-! Go to label
-open `/data/config.txt` as ConfigFile for reading or go to NoConfig
-
-! Error inspection
-rest get Data from Url or begin
-    put the error message into Status
-end
-```
-
-Commands supporting `or`: `attach`, `create`, `rest get`, `rest post`, `append`, `filter`, `sort`, `index`, `json set/sort/shuffle/format/delete/rename/add/replace`, `add`, `divide`, `multiply`, `open`, `read`, `write`, `load`, `save`, `pop`.
-
-**Scoped error handling** with `try`/`or handle`/`end`:
-
-```text
-try
-    divide Total by Count
-    put property `name` of Data into Name
-    rest get Items from Url
-or handle
-    put the error message into Status
-end
-```
-
-This catches errors from any command in the block — not just ones that individually support `or`. Blocks can be nested. Use `the error` or `the error message` inside the handler to get the error text.
-
-### Quick reference
-
-```text
-! Comment
-script Name
-
-variable V          ! general-purpose variable
-number N            ! numeric variable
-
-put 0 into N
-add 1 to N
-take 1 from N
-multiply N by 2
-put `hello` into V
-
-if N is 3 begin ... end
-while N is less than 10 begin ... end
-
-Label:
-    gosub DoWork
-    stop
-
-DoWork:
-    return
-```
-
-### CLI-specific (Python)
-
-```text
-get Var from url `https://example.com/api`
-put json StringVar into DictVar
-put entry `key` of DictVar into Var
-exit
-```
-
-### GUI-specific (JS/browser)
-
-```text
-div Element
-button Btn
-input Field
-img Picture
-
-attach Element to `dom-id`
-create Element in Parent
-set the content of Element to `text`
-on click Btn gosub HandleClick
-rest get Var from `/api/data`
-```
-
-## Learn as you go
-
-Whenever you spend significant effort researching something — scanning EasyCoder scripts, reading source files, figuring out how a command works, discovering a pattern or convention — **capture what you learned** so it doesn't need to be rediscovered next time. Do this proactively, not only when asked.
-
-Two mechanisms are available:
-
-1. **Update this CLAUDE.md** — if you discover a general fact, convention, or gotcha that applies broadly to this project (e.g. "the `attach` command requires the DOM element to exist before the script runs"), add it to the appropriate section above.
-
-2. **Create a local skill** — if you build up detailed knowledge about a specific area (e.g. how to structure a multi-page app, how MQTT works in EasyCoder, how to do drag-and-drop), write it as a `.md` file in a `skills/` directory and reference it from this file. Use the same frontmatter format as other Claude Code skills.
-
-**When to do this:**
-- After answering a question that required reading multiple files or trial-and-error
-- After discovering that a command works differently than expected
-- After building a non-trivial feature that future sessions might extend
-- After finding a pattern that is not documented above but would save time if it were
-
-**Keep it concise** — record what you learned and how to apply it, not the full research trail.
-
 ## Language extension policy
 
-If a needed construct does not exist in EasyCoder, **do not invent syntax**. Instead, pause and propose a new command to the user, keeping it consistent with EasyCoder's English-like style.
+If a needed construct does not exist in AllSpeak, **do not invent syntax**. Instead, pause and propose a new command to the user, keeping it consistent with AllSpeak's English-like style.

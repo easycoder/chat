@@ -1,0 +1,13 @@
+[Unit]
+Description=AllSpeak Chat Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/allspeak
+ExecStart=/usr/bin/python3 /root/allspeak/chat-server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
